@@ -166,8 +166,8 @@ export function createApp() {
     const update = req.body;
     if (update.pre_checkout_query) {
       const q = update.pre_checkout_query;
-      const order = await db.prepare('select * from orders where payload=?').get(q.invoice_payload) as any;
-      const ok = Boolean(order && order.status === 'pending' && q.currency === 'XTR' && Number(q.total_amount) === Number(order.amount_xtr));
+      const order = await db.prepare('select o.*,u.telegram_id payer_telegram_id from orders o join users u on u.id=o.user_id where o.payload=?').get(q.invoice_payload) as any;
+      const ok = Boolean(order && String(q.from?.id) === String(order.payer_telegram_id) && order.status === 'pending' && q.currency === 'XTR' && Number(q.total_amount) === Number(order.amount_xtr));
       if (bot) await bot.api.answerPreCheckoutQuery(q.id, ok, ok ? undefined : { error_message: 'Заказ устарел или цена изменилась. Создайте новый заказ.' });
       else if (config.NODE_ENV !== 'test') return safeError(res, 503, 'telegram_unavailable', 'Telegram handler unavailable');
       return res.json({ ok });
@@ -179,8 +179,8 @@ export function createApp() {
           const inserted = await tx.prepare('insert into webhook_updates(update_id) values(?) on conflict(update_id) do nothing').run(String(update.update_id));
           if (inserted.changes === 0) return { kind: 'duplicate' as const };
         }
-        const order = await tx.prepare('select * from orders where payload=?').get(payment.invoice_payload) as any;
-        if (!order || payment.currency !== 'XTR' || Number(payment.total_amount) !== Number(order.amount_xtr)) return { kind: 'invalid' as const };
+        const order = await tx.prepare('select o.*,u.telegram_id payer_telegram_id from orders o join users u on u.id=o.user_id where o.payload=?').get(payment.invoice_payload) as any;
+        if (!order || String(update.message?.from?.id) !== String(order.payer_telegram_id) || payment.currency !== 'XTR' || Number(payment.total_amount) !== Number(order.amount_xtr)) return { kind: 'invalid' as const };
         const fulfilled = await tx.prepare("update orders set status='fulfilled',telegram_charge_id=?,paid_at=CURRENT_TIMESTAMP,fulfilled_at=CURRENT_TIMESTAMP where id=? and status='pending' returning id").get(payment.telegram_payment_charge_id, order.id);
         if (!fulfilled) return { kind: 'already_processed' as const };
         await tx.prepare('insert into entitlements(id,user_id,product_id,license_id,order_id) values(?,?,?,?,?) on conflict(order_id) do nothing').run(nanoid(), order.user_id, order.product_id, order.license_id, order.id);
