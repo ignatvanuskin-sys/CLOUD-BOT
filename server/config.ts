@@ -51,7 +51,10 @@ export function loadConfig(env = process.env): AppConfig {
     if (config.ALLOW_DEV_LOGIN === 'true') missing.push('ALLOW_DEV_LOGIN must be false in production');
     if (config.DB_DRIVER !== 'postgres') missing.push('DB_DRIVER must be postgres in production');
     if (config.STORAGE_DRIVER !== 's3') missing.push('STORAGE_DRIVER must be s3 in production');
-    if (config.REDIS_TLS !== 'true') missing.push('REDIS_TLS must be true in production');
+    const onRailway = process.env.RAILWAY_ENVIRONMENT_NAME === 'production' || Boolean(process.env.RAILWAY_PROJECT_ID);
+    if (config.REDIS_TLS !== 'true' && !(onRailway && config.REDIS_URL?.startsWith('redis://'))) {
+      missing.push('REDIS_TLS must be true in production');
+    }
   }
   if (missing.length) throw new Error('Production configuration error: ' + missing.join(', '));
   return { ...config, isProduction, allowedOrigin: config.CORS_ORIGIN || config.WEBAPP_URL };

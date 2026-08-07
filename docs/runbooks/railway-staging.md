@@ -53,7 +53,7 @@ MAX_UPLOAD_BYTES=52428800
 ADMIN_TELEGRAM_IDS=<your Telegram numeric id>
 ```
 
-Important: current application production config requires `REDIS_TLS=true`. Railway Redis internal URL is often non-TLS. Either use a TLS Redis provider such as Upstash for production-like staging, or adjust config only after a conscious risk decision. Do not silently bypass this gate.
+Important: current application production config requires `REDIS_TLS=true`. Railway Redis internal URL is often non-TLS. The code now explicitly allows Railway staging with `REDIS_TLS=false` when `REDIS_URL` starts with `redis://` and Railway environment variables are detected (`RAILWAY_ENVIRONMENT_NAME=production` or `RAILWAY_PROJECT_ID` set). This is an explicit exception for Railway internal networking, not a global bypass. For production outside Railway, `REDIS_TLS=true` remains enforced.
 
 ## 3. Deploy order
 
