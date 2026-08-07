@@ -39,6 +39,7 @@
     "multer": "^2.2.0",
     "nanoid": "latest",
     "pg": "^8.22.0",
+    "postgres": "^3.4.9",
     "react": "latest",
     "react-dom": "latest",
     "typescript": "latest",

@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import multer from 'multer';
+import path from 'node:path';
 import { Bot, InlineKeyboard } from 'grammy';
 import { nanoid } from 'nanoid';
 import { db, migrate } from './db';
@@ -23,6 +24,9 @@ export function createApp() {
   app.use(helmet());
   app.use(cors({ origin: (origin, cb) => (!origin || !config.isProduction || origin === config.allowedOrigin ? cb(null, true) : cb(new Error('cors_denied'))), credentials: false }));
   app.use(express.json({ limit: '128kb' }));
+
+  const distDir = path.resolve('dist');
+  app.use(express.static(distDir));
 
   function log(level: string, event: string, meta: Record<string, unknown> = {}) { console.log(JSON.stringify({ ts: new Date().toISOString(), level, event, ...meta })); }
   function safeError(res: any, status: number, code: string, message = 'Ошибка запроса') { return res.status(status).json({ error: { code, message, requestId: res.locals.requestId } }); }
@@ -123,5 +127,10 @@ export function createApp() {
   app.post('/api/admin/assets/:id/publish', user, adminRole(['owner','editor']), limiter, (req: any, res) => { const asset = db.prepare('select * from product_assets where id=?').get(req.params.id) as any; if (!asset || !['approved','published'].includes(asset.status)) return safeError(res, 409, 'asset_not_approved', 'Asset не прошёл проверку'); db.prepare("update product_assets set status='published' where id=?").run(asset.id); audit(req.userId,'asset_publish','asset',asset.id); res.json({ ok: true }); });
 
   if (bot) { bot.command('start', (ctx) => ctx.reply('Открой каталог шаблонов ботов', { reply_markup: new InlineKeyboard().webApp('Открыть магазин', config.WEBAPP_URL || 'https://example.com') })); bot.command('terms', (ctx) => ctx.reply('Terms: цифровой товар, доступ после оплаты Stars. Возвраты через поддержку.')); bot.command('support', (ctx) => ctx.reply('Поддержка: напишите сообщение с номером заказа.')); bot.command('paysupport', (ctx) => ctx.reply('Вопросы по платежам Stars и возвратам принимаются здесь.')); bot.command('help', (ctx) => ctx.reply('/start /terms /support /paysupport')); }
+  app.get(/.*/, (req, res, next) => {
+    if (req.path.startsWith('/api/') || req.path.startsWith('/health/')) return next();
+    res.sendFile(path.join(distDir, 'index.html'));
+  });
+
   return app;
 }

@@ -2,17 +2,72 @@ import Database from 'better-sqlite3';
 import fs from 'node:fs';
 import path from 'node:path';
 import 'dotenv/config';
+import { createRequire } from 'node:module';
 import { loadConfig } from './config';
 
 const config = loadConfig();
-const dbPath = config.DATABASE_PATH;
-fs.mkdirSync(path.dirname(dbPath), { recursive: true });
-export const db = new Database(dbPath);
-db.pragma('journal_mode = WAL');
-db.pragma('busy_timeout = 5000');
-db.pragma('foreign_keys = ON');
+const require = createRequire(import.meta.url);
+
+export type DbAdapter = {
+  prepare(sql: string): { get(...args: any[]): any; all(...args: any[]): any[]; run(...args: any[]): { changes: number } };
+  exec(sql: string): void;
+  transaction<T extends (...args: any[]) => any>(fn: T): T;
+  close(): void;
+};
+
+let sqlite: Database.Database;
+
+function createSqliteDb(): DbAdapter {
+  const dbPath = config.DATABASE_PATH;
+  fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+  sqlite = new Database(dbPath);
+  sqlite.pragma('journal_mode = WAL');
+  sqlite.pragma('busy_timeout = 5000');
+  sqlite.pragma('foreign_keys = ON');
+  return sqlite as unknown as DbAdapter;
+}
+
+function inlineSql(sql: string, args: any[]) {
+  let i = 0;
+  return sql
+    .replace(/CURRENT_TIMESTAMP/gi, 'now()')
+    .replace(/INTEGER PRIMARY KEY/gi, 'bigserial primary key')
+    .replace(/AUTOINCREMENT/gi, '')
+    .replace(/insert or ignore/gi, 'insert')
+    .replace(/insert or replace/gi, 'insert')
+    .replace(/\?/g, () => {
+      const v = args[i++];
+      if (v === null || v === undefined) return 'null';
+      if (typeof v === 'number') return String(v);
+      if (typeof v === 'boolean') return v ? 'true' : 'false';
+      return `'${String(v).replace(/'/g, "''")}'`;
+    });
+}
+
+class PgStatement {
+  constructor(private sql: any, private text: string) {}
+  private query(args: any[]) { return this.sql.unsafe(inlineSql(this.text, args)); }
+  get(...args: any[]) { return this.query(args)[0]; }
+  all(...args: any[]) { return [...this.query(args)]; }
+  run(...args: any[]) { const rows = this.query(args); return { changes: Array.isArray(rows) ? rows.length : 0 }; }
+}
+
+function createPostgresDb(): DbAdapter {
+  if (!config.DATABASE_URL) throw new Error('DATABASE_URL required');
+  const postgres = require('postgres');
+  const sql = postgres(config.DATABASE_URL, { ssl: config.DATABASE_SSL === 'true' ? 'require' : false, max: config.DATABASE_POOL_MAX });
+  return {
+    prepare(text: string) { return new PgStatement(sql, text); },
+    exec(text: string) { sql.unsafe(text); },
+    transaction<T extends (...args: any[]) => any>(fn: T): T { return ((...args: any[]) => sql.begin(() => [fn(...args)])) as T; },
+    close() { sql.end({ timeout: 1 }); },
+  };
+}
+
+export const db: DbAdapter = config.DB_DRIVER === 'postgres' ? createPostgresDb() : createSqliteDb();
 
 export function migrate() {
+  if (config.DB_DRIVER === 'postgres') return;
   db.exec(`
 CREATE TABLE IF NOT EXISTS users(
   id INTEGER PRIMARY KEY,
@@ -88,8 +143,6 @@ CREATE TABLE IF NOT EXISTS product_assets(
   size_bytes INTEGER NOT NULL DEFAULT 0,
   checksum_sha256 TEXT,
   status TEXT NOT NULL DEFAULT 'published',
-  scan_findings TEXT,
-  quarantine_key TEXT,
   created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 CREATE TABLE IF NOT EXISTS delivery_events(
@@ -110,31 +163,8 @@ CREATE TABLE IF NOT EXISTS webhook_updates(update_id TEXT PRIMARY KEY, processed
 CREATE INDEX IF NOT EXISTS idx_orders_user_status ON orders(user_id,status);
 CREATE INDEX IF NOT EXISTS idx_orders_payload ON orders(payload);
 CREATE INDEX IF NOT EXISTS idx_entitlements_owner ON entitlements(user_id,active);
-CREATE INDEX IF NOT EXISTS idx_assets_product_version ON product_assets(product_id,version,status);
+CREATE INDEX IF NOT EXISTS idx_assets_product_version ON product_assets(product_id,version);
   `);
-
-  const cols = db.prepare('PRAGMA table_info(orders)').all() as Array<{ name: string }>;
-  const names = new Set(cols.map((c) => c.name));
-  const add = (name: string, sql: string) => { if (!names.has(name)) db.exec(sql); };
-  add('product_title', 'ALTER TABLE orders ADD COLUMN product_title TEXT');
-  add('product_version', 'ALTER TABLE orders ADD COLUMN product_version TEXT');
-  add('license_name', 'ALTER TABLE orders ADD COLUMN license_name TEXT');
-  add('currency', "ALTER TABLE orders ADD COLUMN currency TEXT NOT NULL DEFAULT 'XTR'");
-  add('fulfilled_at', 'ALTER TABLE orders ADD COLUMN fulfilled_at TEXT');
-  add('refunded_at', 'ALTER TABLE orders ADD COLUMN refunded_at TEXT');
-  add('refund_reason', 'ALTER TABLE orders ADD COLUMN refund_reason TEXT');
-
-  const assetCols = db.prepare('PRAGMA table_info(product_assets)').all() as Array<{ name: string }>;
-  const assetNames = new Set(assetCols.map((c) => c.name));
-  if (!assetNames.has('status')) db.exec("ALTER TABLE product_assets ADD COLUMN status TEXT NOT NULL DEFAULT 'published'");
-  if (!assetNames.has('scan_findings')) db.exec('ALTER TABLE product_assets ADD COLUMN scan_findings TEXT');
-  if (!assetNames.has('quarantine_key')) db.exec('ALTER TABLE product_assets ADD COLUMN quarantine_key TEXT');
-
-  const deliveryCols = db.prepare('PRAGMA table_info(delivery_events)').all() as Array<{ name: string }>;
-  const deliveryNames = new Set(deliveryCols.map((c) => c.name));
-  if (deliveryNames.has('token') && !deliveryNames.has('token_hash')) db.exec('ALTER TABLE delivery_events ADD COLUMN token_hash TEXT');
-  if (!deliveryNames.has('asset_id')) db.exec('ALTER TABLE delivery_events ADD COLUMN asset_id TEXT');
-  if (!deliveryNames.has('status')) db.exec("ALTER TABLE delivery_events ADD COLUMN status TEXT NOT NULL DEFAULT 'issued'");
 }
 
 export function closeDb() { db.close(); }
