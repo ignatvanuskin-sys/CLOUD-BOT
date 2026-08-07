@@ -126,7 +126,23 @@ export function createApp() {
   });
   app.post('/api/admin/assets/:id/publish', user, adminRole(['owner','editor']), limiter, async (req: any, res) => { const asset = await db.prepare('select * from product_assets where id=?').get(req.params.id) as any; if (!asset || !['approved','published'].includes(asset.status)) return safeError(res, 409, 'asset_not_approved', 'Asset Ð½Ðµ Ð¿Ñ€Ð¾ÑˆÑ‘Ð» Ð¿Ñ€Ð¾Ð²ÐµÑ€ÐºÑƒ'); await db.prepare("update product_assets set status='published' where id=?").run(asset.id); await audit(req.userId,'asset_publish','asset',asset.id); res.json({ ok: true }); });
 
-  if (bot) { bot.command('start', (ctx) => ctx.reply('ÐžÑ‚ÐºÑ€Ð¾Ð¹ ÐºÐ°Ñ‚Ð°Ð»Ð¾Ð³ ÑˆÐ°Ð±Ð»Ð¾Ð½Ð¾Ð² Ð±Ð¾Ñ‚Ð¾Ð²', { reply_markup: new InlineKeyboard().webApp('ÐžÑ‚ÐºÑ€Ñ‹Ñ‚ÑŒ Ð¼Ð°Ð³Ð°Ð·Ð¸Ð½', config.WEBAPP_URL || 'https://example.com') })); bot.command('terms', (ctx) => ctx.reply('Terms: Ñ†Ð¸Ñ„Ñ€Ð¾Ð²Ð¾Ð¹ Ñ‚Ð¾Ð²Ð°Ñ€, Ð´Ð¾ÑÑ‚ÑƒÐ¿ Ð¿Ð¾ÑÐ»Ðµ Ð¾Ð¿Ð»Ð°Ñ‚Ñ‹ Stars. Ð’Ð¾Ð·Ð²Ñ€Ð°Ñ‚Ñ‹ Ñ‡ÐµÑ€ÐµÐ· Ð¿Ð¾Ð´Ð´ÐµÑ€Ð¶ÐºÑƒ.')); bot.command('support', (ctx) => ctx.reply('ÐŸÐ¾Ð´Ð´ÐµÑ€Ð¶ÐºÐ°: Ð½Ð°Ð¿Ð¸ÑˆÐ¸Ñ‚Ðµ ÑÐ¾Ð¾Ð±Ñ‰ÐµÐ½Ð¸Ðµ Ñ Ð½Ð¾Ð¼ÐµÑ€Ð¾Ð¼ Ð·Ð°ÐºÐ°Ð·Ð°.')); bot.command('paysupport', (ctx) => ctx.reply('Ð’Ð¾Ð¿Ñ€Ð¾ÑÑ‹ Ð¿Ð¾ Ð¿Ð»Ð°Ñ‚ÐµÐ¶Ð°Ð¼ Stars Ð¸ Ð²Ð¾Ð·Ð²Ñ€Ð°Ñ‚Ð°Ð¼ Ð¿Ñ€Ð¸Ð½Ð¸Ð¼Ð°ÑŽÑ‚ÑÑ Ð·Ð´ÐµÑÑŒ.')); bot.command('help', (ctx) => ctx.reply('/start /terms /support /paysupport')); }
+  if (bot) {
+    bot.command('start', (ctx) => ctx.reply('Îòêðîé êàòàëîã øàáëîíîâ áîòîâ', { reply_markup: new InlineKeyboard().webApp('Îòêðûòü ìàãàçèí', config.WEBAPP_URL || 'https://example.com') }));
+    bot.command('terms', (ctx) => ctx.reply('Terms: öèôðîâîé òîâàð, äîñòóï ïîñëå îïëàòû Stars. Âîçâðàòû ÷åðåç ïîääåðæêó.'));
+    bot.command('support', (ctx) => ctx.reply('Ïîääåðæêà: íàïèøèòå ñîîáùåíèå ñ íîìåðîì çàêàçà.'));
+    bot.command('paysupport', (ctx) => ctx.reply('Âîïðîñû ïî ïëàòåæàì Stars è âîçâðàòàì ïðèíèìàþòñÿ çäåñü.'));
+    bot.command('help', (ctx) => ctx.reply('/start /terms /support /paysupport'));
+    app.post('/api/webhooks/telegram', async (req: any, res) => {
+      if (config.WEBHOOK_SECRET && req.headers['x-telegram-bot-api-secret-token'] !== config.WEBHOOK_SECRET) return safeError(res, 403, 'bad_webhook_secret', 'Forbidden');
+      try {
+        await bot.handleUpdate(req.body);
+        return res.json({ ok: true, handled_by: 'grammy' });
+      } catch (error) {
+        log('error', 'telegram_bot_update_failed', { message: error instanceof Error ? error.message : String(error) });
+        return safeError(res, 500, 'telegram_update_failed', 'Telegram update failed');
+      }
+    });
+  }
   app.get(/.*/, (req, res, next) => {
     if (req.path.startsWith('/api/') || req.path.startsWith('/health/')) return next();
     res.sendFile(path.join(distDir, 'index.html'));
