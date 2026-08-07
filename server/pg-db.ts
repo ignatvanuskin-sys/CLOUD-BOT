@@ -19,15 +19,24 @@ function toPg(sql: string): string {
   return sql.replace(/\?/g, () => `$${++i}`);
 }
 
-function translateSql(sql: string) {
-  let result = sql;
-  if (!/CREATE TABLE/i.test(result)) {
-    result = result.replace(/INSERT OR IGNORE/i, 'INSERT');
-    result = result.replace(/INSERT OR REPLACE/i, 'INSERT');
-    result = result.replace(/\)\s*values\s*\(/i, ') ON CONFLICT DO NOTHING VALUES (');
+function translateSql(sql: string): string {
+  if (/CREATE TABLE/i.test(sql)) return sql;
+
+  // INSERT OR IGNORE → INSERT ... ON CONFLICT DO NOTHING
+  if (/INSERT\s+OR\s+IGNORE/i.test(sql)) {
+    const base = sql.replace(/INSERT\s+OR\s+IGNORE/i, 'INSERT');
+    if (/\breturning\b/i.test(base)) {
+      return base.replace(/(\s+returning\b)/i, ' ON CONFLICT DO NOTHING$1');
+    }
+    return base + ' ON CONFLICT DO NOTHING';
   }
-  result = result.replace(/CURRENT_TIMESTAMP/gi, 'CURRENT_TIMESTAMP');
-  return result;
+
+  // INSERT OR REPLACE → INSERT (caller must already have ON CONFLICT clause)
+  if (/INSERT\s+OR\s+REPLACE/i.test(sql)) {
+    return sql.replace(/INSERT\s+OR\s+REPLACE/i, 'INSERT');
+  }
+
+  return sql;
 }
 
 export function createPgDb(config: AppConfig): DbClient {

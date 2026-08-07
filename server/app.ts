@@ -17,7 +17,19 @@ export function createApp() {
   void migrate();
   const app = express();
   const bot = config.BOT_TOKEN && config.BOT_TOKEN !== 'TEST_TOKEN' ? new Bot(config.BOT_TOKEN) : null;
+  if (bot) {
+    bot.catch((err) => {
+      console.error(JSON.stringify({ ts: new Date().toISOString(), level: 'error', event: 'bot_middleware_error', message: err.message, stack: String(err.stack).slice(0, 400) }));
+    });
+  }
   const botReady = bot ? bot.init().then(async () => {
+    await bot.api.setMyCommands([
+      { command: 'start',      description: 'Открыть магазин' },
+      { command: 'help',       description: 'Список команд' },
+      { command: 'terms',      description: 'Условия использования' },
+      { command: 'support',    description: 'Поддержка' },
+      { command: 'paysupport', description: 'Вопросы по платежам' },
+    ]);
     if (config.WEBAPP_URL) {
       const webhookUrl = config.WEBAPP_URL.replace(/\/$/, '') + '/api/webhooks/telegram';
       await bot.api.setWebhook(webhookUrl, {
@@ -29,7 +41,6 @@ export function createApp() {
     console.log(JSON.stringify({ ts: new Date().toISOString(), level: 'info', event: 'telegram_bot_ready' }));
   }).catch((error) => {
     console.error(JSON.stringify({ ts: new Date().toISOString(), level: 'error', event: 'telegram_bot_init_failed', message: error instanceof Error ? error.message : String(error) }));
-    bot.stop?.();
     return Promise.resolve();
   }) : Promise.resolve();
   const ttlStore = createTtlStore(config);
