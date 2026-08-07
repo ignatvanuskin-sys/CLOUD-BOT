@@ -35,6 +35,7 @@ function translateSql(sql: string) {
   if (!/CREATE TABLE/i.test(result)) {
     result = result.replace(/INSERT OR IGNORE/i, 'INSERT');
     result = result.replace(/INSERT OR REPLACE/i, 'INSERT');
+    result = result.replace(/\)\s*values\s*\(/i, ') ON CONFLICT DO NOTHING VALUES (');
   }
   result = result.replace(/CURRENT_TIMESTAMP/gi, 'CURRENT_TIMESTAMP');
   return result;
