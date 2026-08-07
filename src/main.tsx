@@ -50,7 +50,9 @@ async function api(path: string, opts: RequestInit = {}) {
 
   if (!response.ok) {
     const body = await response.json().catch(() => ({ error: response.statusText }));
-    throw new Error(body.error || 'request_failed');
+    const error = body?.error;
+    const message = typeof error === 'string' ? error : error?.message || error?.code || response.statusText || 'request_failed';
+    throw new Error(message);
   }
 
   return response.json();
