@@ -31,12 +31,12 @@ WEBHOOK_SECRET=<random 16-32+ chars>
 
 DB_DRIVER=postgres
 DATABASE_URL=${{Postgres.DATABASE_URL}}
-DATABASE_SSL=false
+DATABASE_SSL=true
 DATABASE_POOL_MAX=10
 
 REDIS_URL=${{Redis.REDIS_URL}}
 REDIS_KEY_PREFIX=cloud-bot:staging:
-REDIS_TLS=false
+REDIS_TLS=true
 
 STORAGE_DRIVER=s3
 S3_ENDPOINT=<Cloudflare R2 S3 API endpoint>
