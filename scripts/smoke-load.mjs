@@ -1,0 +1,1 @@
+const base=process.env.BASE_URL||'http://localhost:8787';const n=Number(process.env.SMOKE_N||20);let ok=0;for(let i=0;i<n;i++){const r=await fetch(base+'/api/products?limit=5');if(r.ok)ok++;}console.log(JSON.stringify({requests:n,ok}));if(ok!==n)process.exit(1)

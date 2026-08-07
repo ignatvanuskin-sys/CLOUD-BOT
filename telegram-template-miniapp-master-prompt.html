@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Master prompt — Telegram Template Store</title>
+  <style>
+    :root{--bg:#0b1016;--panel:#121b24;--panel2:#17232d;--line:#293946;--text:#eef5f3;--muted:#93a5ae;--mint:#71f1bc;--blue:#8bb8ff;--amber:#ffd166}
+    *{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 90% 0,#173b34 0,transparent 35%),var(--bg);color:var(--text);font:15px/1.55 Inter,system-ui,sans-serif}.wrap{max-width:1060px;margin:auto;padding:34px 20px 60px}h1{max-width:800px;margin:8px 0 14px;font-size:clamp(36px,6vw,68px);line-height:.98;letter-spacing:-.055em}h2{margin:0 0 14px;font-size:25px;letter-spacing:-.03em}h3{margin:0 0 6px;font-size:16px}p{margin:0;color:var(--muted)}.kicker{color:var(--mint);font-size:12px;font-weight:800;letter-spacing:.14em;text-transform:uppercase}.hero{padding-bottom:32px;border-bottom:1px solid var(--line)}.lead{max-width:750px;font-size:18px}.tag{display:inline-block;margin-top:18px;padding:7px 10px;border:1px solid #31624f;border-radius:999px;color:var(--mint);background:#10241e;font-size:12px;font-weight:800}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:13px}.grid.two{grid-template-columns:repeat(2,1fr)}section{padding-top:32px}.card{padding:19px;border:1px solid var(--line);border-radius:17px;background:linear-gradient(145deg,rgba(23,35,45,.96),rgba(14,21,28,.96))}.num{display:block;margin-bottom:11px;color:var(--mint);font-size:11px;font-weight:900;letter-spacing:.12em}.list{display:grid;gap:9px;margin:0;padding:0;list-style:none}.list li{display:flex;gap:9px;color:var(--muted)}.list li:before{content:'✓';color:var(--mint);font-weight:900}.flow{display:grid;grid-template-columns:repeat(4,1fr);gap:0}.step{position:relative;padding:18px;border:1px solid var(--line);border-right:0;background:var(--panel)}.step:first-child{border-radius:15px 0 0 15px}.step:last-child{border-right:1px solid var(--line);border-radius:0 15px 15px 0}.step:not(:last-child):after{content:'→';position:absolute;right:-11px;top:50%;z-index:2;display:grid;place-items:center;width:21px;height:21px;border-radius:50%;background:var(--mint);color:#0b1713;font-weight:900;transform:translateY(-50%)}.step b{display:block;margin-bottom:4px}.step small{color:var(--muted)}.decision{padding:21px;border:1px solid #315e4e;border-radius:17px;background:linear-gradient(135deg,#10271f,#111b23)}.decision strong{display:block;margin-bottom:5px;color:var(--mint);font-size:19px}.sources{display:flex;flex-wrap:wrap;gap:9px}.source{padding:8px 11px;border:1px solid var(--line);border-radius:10px;color:var(--blue);font-size:12px;text-decoration:none}.copybox{position:relative}.copybox textarea{width:100%;min-height:230px;padding:18px 118px 18px 18px;border:1px solid var(--line);border-radius:15px;resize:vertical;background:#0c141b;color:#dbe8e4;font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace}.copy{position:absolute;right:12px;top:12px;padding:8px 11px;border:1px solid #3e7d68;border-radius:9px;background:#143226;color:var(--mint);cursor:pointer;font-weight:800}.note{margin-top:10px;font-size:13px}.foot{padding-top:30px;color:#667782;font-size:12px}@media(max-width:740px){.wrap{padding:24px 14px 45px}.grid,.grid.two{grid-template-columns:1fr}.flow{grid-template-columns:1fr}.step,.step:first-child,.step:last-child{border-right:1px solid var(--line);border-radius:13px}.step:not(:last-child):after{content:'↓';right:50%;top:auto;bottom:-12px;transform:translateX(50%)}.copybox textarea{padding-right:18px;padding-top:55px}.copy{left:12px;right:auto}}
+  </style>
+</head>
+<body>
+<main class="wrap">
+  <header class="hero">
+    <div class="kicker">Deep research / product implementation</div>
+    <h1>Мастер‑промпт для магазина Telegram‑ботов</h1>
+    <p class="lead">Готовое задание для AI‑кодера или команды: Mini App, каталог, deep links из канала, Telegram Stars, защищённая выдача файлов, лицензии, админка и аналитика.</p>
+    <span class="tag">Основная версия: telegram-template-miniapp-master-prompt.md</span>
+  </header>
+
+  <section>
+    <div class="grid">
+      <article class="card"><span class="num">01 / STRATEGY</span><h3>Начать с single‑vendor</h3><p>Сначала продаются собственные решения. Multi‑vendor, escrow, криптооплата и сложные подписки откладываются до подтверждения спроса.</p></article>
+      <article class="card"><span class="num">02 / CONVERSION</span><h3>Пост → конкретный товар</h3><p>Канал не дублирует каталог. Он показывает короткий результат и ведёт через <b>?startapp=product_[id]</b> прямо в карточку товара.</p></article>
+      <article class="card"><span class="num">03 / TRUST</span><h3>Продаётся запуск, не ZIP</h3><p>У каждого шаблона есть demo, список функций, требования, лицензия, версия, changelog и понятный путь после оплаты.</p></article>
+    </div>
+  </section>
+
+  <section>
+    <h2>Ключевой пользовательский путь</h2>
+    <div class="flow">
+      <div class="step"><b>Канал</b><small>Короткая карточка с обещанием результата.</small></div>
+      <div class="step"><b>Deep link</b><small>Открывает нужный товар, а не общий бот.</small></div>
+      <div class="step"><b>Demo</b><small>Функции, лицензия, стек, цена в Stars.</small></div>
+      <div class="step"><b>Доступ</b><small>Invoice → подтверждение → защищённая выдача.</small></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Что уже заложено в полном промпте</h2>
+    <div class="grid two">
+      <article class="card"><ul class="list"><li>Mobile-first UX для ширины 360–430 px.</li><li>Светлая и тёмная тема через Telegram theme params.</li><li>BackButton, BottomButton, safe area и loader.</li><li>Каталог, поиск, категории по бизнес-задачам.</li><li>Карточка товара, лицензии, отзывы после покупки.</li><li>«Мои покупки», версии, changelog, повторный доступ.</li></ul></article>
+      <article class="card"><ul class="list"><li>Stars `XTR` для цифровых товаров.</li><li>Платёжный lifecycle до `successful_payment`.</li><li>Идемпотентность webhook и хранение charge id.</li><li>Валидация `initData` только на сервере.</li><li>Signed URLs, RBAC, rate limits, XSS/SSRF checks.</li><li>Тесты, seed, README, BotFather и deploy checklist.</li></ul></article>
+    </div>
+  </section>
+
+  <section>
+    <div class="decision"><strong>Главное решение</strong><p>Не копировать визуальный стиль WorkHub. Взять его воронку и сделать собственный «developer marketplace / launchpad»: графитовая база, мятный акцент, сильные превью и спокойная типографика. Внутри Telegram для цифровых шаблонов использовать Stars, а не Stripe или криптовалюту.</p></div>
+  </section>
+
+  <section>
+    <h2>Короткая версия для AI‑кодера</h2>
+    <div class="copybox"><textarea id="prompt" readonly>Изучи существующий репозиторий и внедри single-vendor Telegram Mini App-магазин собственных шаблонов ботов. Сохрани текущий стек. Сделай канал продаж с постами и deeplink ?startapp=product_[id], каталог, карточку с demo/функциями/стеком/лицензией, оплату цифрового товара через Telegram Stars XTR, выдачу файлов только после подтверждённого successful_payment, историю покупок, защищённые короткоживущие ссылки, админский CRUD товаров и команды /start, /terms, /support, /paysupport. Валидируй initData на сервере, не доверяй initDataUnsafe, цене и user id из клиента. Сделай mobile-first интерфейс в собственном стиле developer marketplace: графит, мятный акцент, Telegram theme params, safe area, BackButton и BottomButton. Не копируй WorkHub визуально и не добавляй multi-vendor, wallet, криптооплату или сложные подписки в MVP. Сначала покажи аудит репозитория, карту экранов, схему данных и план, затем реализуй вертикальный срез и протестируй auth, deep link, платежный webhook, идемпотентность и выдачу файлов. Сверяй платежи и Mini Apps с официальными документами Telegram: https://core.telegram.org/bots/webapps и https://core.telegram.org/bots/payments-stars.</textarea><button class="copy" onclick="navigator.clipboard.writeText(document.getElementById('prompt').value).then(()=>this.textContent='Скопировано')">Копировать</button></div>
+    <p class="note">Полная версия с архитектурой, сущностями, API, лицензиями, каналом, аналитикой и acceptance criteria находится в Markdown-файле рядом.</p>
+  </section>
+
+  <section>
+    <h2>Источники</h2>
+    <div class="sources"><a class="source" href="https://core.telegram.org/bots/webapps">Telegram Mini Apps</a><a class="source" href="https://core.telegram.org/bots/payments-stars">Payments in Stars</a><a class="source" href="https://core.telegram.org/bots/features">Bot features</a><a class="source" href="https://telegram.org/tos/stars">Stars terms</a><a class="source" href="https://www.botlaunch.io/marketplace">Bot template marketplace</a><a class="source" href="https://getly.store/partners/botlaunch">Template delivery model</a><a class="source" href="https://leadteh.ru/templates">Template categories</a><a class="source" href="https://sendcraft.ru/">Bot builder patterns</a></div>
+  </section>
+  <footer class="foot">Исследование основано на официальных документах Telegram и публичных страницах рыночных аналогов. Перед релизом повторно проверь актуальные правила Stars, Bot API и требования к возвратам.</footer>
+</main>
+</body>
+</html>
