@@ -17,7 +17,15 @@ export function createApp() {
   void migrate();
   const app = express();
   const bot = config.BOT_TOKEN && config.BOT_TOKEN !== 'TEST_TOKEN' ? new Bot(config.BOT_TOKEN) : null;
-  const botReady = bot ? bot.init().then(() => {
+  const botReady = bot ? bot.init().then(async () => {
+    if (config.WEBAPP_URL) {
+      const webhookUrl = config.WEBAPP_URL.replace(/\/$/, '') + '/api/webhooks/telegram';
+      await bot.api.setWebhook(webhookUrl, {
+        secret_token: config.WEBHOOK_SECRET,
+        allowed_updates: ['message', 'pre_checkout_query'],
+      });
+      console.log(JSON.stringify({ ts: new Date().toISOString(), level: 'info', event: 'webhook_registered', url: webhookUrl }));
+    }
     console.log(JSON.stringify({ ts: new Date().toISOString(), level: 'info', event: 'telegram_bot_ready' }));
   }).catch((error) => {
     console.error(JSON.stringify({ ts: new Date().toISOString(), level: 'error', event: 'telegram_bot_init_failed', message: error instanceof Error ? error.message : String(error) }));
@@ -191,6 +199,14 @@ export function createApp() {
 
   if (bot) {
   app.post('/api/admin/assets/:id/publish', user, adminRole(['owner','editor']), limiter, async (req: any, res) => { const asset = await db.prepare('select * from product_assets where id=?').get(req.params.id) as any; if (!asset || !['approved','published'].includes(asset.status)) return safeError(res, 409, 'asset_not_approved', 'Asset не прошёл проверку'); await db.prepare("update product_assets set status='published' where id=?").run(asset.id); await audit(req.userId,'asset_publish','asset',asset.id); res.json({ ok: true }); });
+    bot.command('start', async (ctx) => {
+      if (config.WEBAPP_URL) {
+        const keyboard = new InlineKeyboard().webApp('Открыть магазин 🛍️', config.WEBAPP_URL);
+        await ctx.reply('Добро пожаловать! 👋\nНажмите кнопку ниже, чтобы открыть магазин цифровых товаров:', { reply_markup: keyboard });
+      } else {
+        await ctx.reply('Добро пожаловать! 👋');
+      }
+    });
     bot.command('terms', (ctx) => ctx.reply('Terms: цифровой товар, доступ после оплаты Stars. Возвраты через поддержку.'));
     bot.command('support', (ctx) => ctx.reply('Поддержка: напишите сообщение с номером заказа.'));
     bot.command('paysupport', (ctx) => ctx.reply('Вопросы по платежам Stars и возвратам принимаются здесь.'));
