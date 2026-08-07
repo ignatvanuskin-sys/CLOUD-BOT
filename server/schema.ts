@@ -52,6 +52,8 @@ export function validateTelegramInitData(raw: string, botToken: string, maxAgeSe
     .map(([key, value]) => `${key}=${value}`)
     .join('\n');
 
+  // Telegram Mini Apps validation: secret key is HMAC_SHA256(bot_token, key='WebAppData').
+  // Node's createHmac takes the key as the second argument, so 'WebAppData' must be the key.
   const secret = crypto.createHmac('sha256', 'WebAppData').update(botToken).digest();
   const calculatedHash = crypto.createHmac('sha256', secret).update(dataCheckString).digest('hex');
 

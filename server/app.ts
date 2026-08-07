@@ -65,7 +65,7 @@ export function createApp() {
       const row = await db.prepare('insert into users(telegram_id,name) values(?,?) on conflict(telegram_id) do update set name=excluded.name returning id').get(auth.telegramId, [info.first_name, info.last_name].filter(Boolean).join(' ')) as any;
       const token = nanoid(48); await ttlStore.set(`session:${hashToken(token)}`, JSON.stringify({ userId: row.id }), config.SESSION_TTL_SECONDS); await event(row.id, 'app_open');
       res.json({ token, expiresIn: config.SESSION_TTL_SECONDS, user: { id: row.id, name: info.first_name || 'Telegram user' } });
-    } catch { log('warn', 'auth_failed', { requestId: res.locals.requestId }); return safeError(res, 401, 'telegram_auth_failed', 'РќРµ СѓРґР°Р»РѕСЃСЊ РїРѕРґС‚РІРµСЂРґРёС‚СЊ РІС…РѕРґ С‡РµСЂРµР· Telegram'); }
+    } catch (error) { log('warn', 'auth_failed', { requestId: res.locals.requestId, reason: error instanceof Error ? error.message : String(error) }); return safeError(res, 401, 'telegram_auth_failed', 'Не удалось подтвердить вход через Telegram'); }
   });
 
   app.get('/api/me', user, async (req: any, res) => res.json({ user: await db.prepare('select id,name from users where id=?').get(req.userId) }));
