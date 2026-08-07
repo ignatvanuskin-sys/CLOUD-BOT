@@ -27,7 +27,7 @@ const postgresKeywords = [
 
 function looksLikeNonParameterized(sql: string) {
   const upper = sql.trim().toUpperCase();
-  return !postgresKeywords.some((k) => upper.startsWith(k)) && /\?/.test(sql);
+  return !postgresKeywords.some((k) => upper.startsWith(k)) && !/\?/.test(sql);
 }
 
 function translateSql(sql: string) {
