@@ -14,26 +14,36 @@ export type DbClient = {
   close(): Promise<void>;
 };
 
-function escapeValue(value: unknown) {
-  if (value === null || value === undefined) return 'null';
-  if (typeof value === 'number') return String(value);
-  if (typeof value === 'boolean') return value ? 'true' : 'false';
-  return `'${String(value).replace(/'/g, "''")}'`;
+const postgresKeywords = [
+  'CREATE TABLE',
+  'CREATE INDEX',
+  'INSERT INTO schema_migrations',
+  'BEGIN',
+  'COMMIT',
+  'ROLLBACK',
+  'SELECT to_regclass',
+  'SELECT pg_advisory_lock',
+];
+
+function looksLikeNonParameterized(sql: string) {
+  const upper = sql.trim().toUpperCase();
+  return !postgresKeywords.some((k) => upper.startsWith(k)) && /\?/.test(sql);
 }
 
-function translateSql(sql: string, args: unknown[]) {
-  let index = 0;
-  return sql
-    .replace(/CURRENT_TIMESTAMP/gi, 'now()')
-    .replace(/insert or ignore/gi, 'insert')
-    .replace(/insert or replace/gi, 'insert')
-    .replace(/\?/g, () => escapeValue(args[index++]));
+function translateSql(sql: string) {
+  let result = sql;
+  if (!/CREATE TABLE/i.test(result)) {
+    result = result.replace(/INSERT OR IGNORE/i, 'INSERT');
+    result = result.replace(/INSERT OR REPLACE/i, 'INSERT');
+  }
+  result = result.replace(/CURRENT_TIMESTAMP/gi, 'CURRENT_TIMESTAMP');
+  return result;
 }
 
 export function createPgDb(config: AppConfig): DbClient {
   if (!config.DATABASE_URL) throw new Error('DATABASE_URL required');
   const sql = postgres(config.DATABASE_URL, {
-    ssl: config.DATABASE_SSL === 'true' ? { rejectUnauthorized: process.env.DATABASE_SSL_REJECT_UNAUTHORIZED === 'true' } : false,
+    ssl: config.DATABASE_SSL === 'true' ? { rejectUnauthorized: config.DATABASE_SSL_REJECT_UNAUTHORIZED === 'true' } : false,
     max: config.DATABASE_POOL_MAX,
     idle_timeout: 20,
     connect_timeout: 10,
@@ -42,16 +52,28 @@ export function createPgDb(config: AppConfig): DbClient {
   return {
     prepare(text: string) {
       return {
-        async get(...args: unknown[]) { return (await sql.unsafe(translateSql(text, args)))[0]; },
-        async all(...args: unknown[]) { return [...await sql.unsafe(translateSql(text, args))]; },
+        async get(...args: unknown[]) {
+          const t = translateSql(text);
+          if (!looksLikeNonParameterized(t)) return (await (sql as any)(t, ...args))[0];
+          throw new Error('pg-db: prepare() requires parameterized SQL for runtime queries');
+        },
+        async all(...args: unknown[]) {
+          const t = translateSql(text);
+          if (!looksLikeNonParameterized(t)) return [...(await (sql as any)(t, ...args))];
+          throw new Error('pg-db: prepare() requires parameterized SQL for runtime queries');
+        },
         async run(...args: unknown[]) {
-          const rows = await sql.unsafe(translateSql(text, args));
-          return { changes: Array.isArray(rows) ? rows.count || rows.length : 0 };
+          const t = translateSql(text);
+          if (!looksLikeNonParameterized(t)) {
+            const rows = await (sql as any)(t, ...args);
+            return { changes: typeof rows.count === 'number' ? rows.count : (Array.isArray(rows) ? rows.length : 0) };
+          }
+          throw new Error('pg-db: prepare() requires parameterized SQL for runtime queries');
         },
       };
     },
-    async exec(text: string) { await sql.unsafe(text); },
-    async transaction<T>(fn: () => Promise<T>) { const rows = await sql.begin(async () => [await fn()]); return rows[0] as T; },
+    async exec(text: string) { await (sql as any)(translateSql(text)); },
+    async transaction<T>(fn: () => Promise<T>) { return sql.begin(async () => await fn()) as any as Promise<T>; },
     async close() { await sql.end({ timeout: 2 }); },
   };
 }

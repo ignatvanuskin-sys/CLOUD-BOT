@@ -38,7 +38,10 @@ type Plan = {
 };
 
 async function api(path: string, opts: RequestInit = {}) {
-  const token = localStorage.getItem('token');
+  const storage = tg?.WebAppStorage;
+  let token: string | null = null;
+  try { token = await storage?.getItem('token'); } catch { /* ignore */ }
+  if (!token) token = localStorage.getItem('token');
   const response = await fetch('/api' + path, {
     ...opts,
     headers: {
@@ -51,7 +54,7 @@ async function api(path: string, opts: RequestInit = {}) {
   if (!response.ok) {
     const body = await response.json().catch(() => ({ error: response.statusText }));
     const error = body?.error;
-    const message = typeof error === 'string' ? error : error?.message || error?.code || response.statusText || 'request_failed';
+    const message = typeof error === 'string' ? error : error?.message || error?.code || 'request_failed';
     throw new Error(message);
   }
 
@@ -82,7 +85,8 @@ function App() {
       body: JSON.stringify({ initData, devTelegramId: import.meta.env.DEV ? '777' : undefined }),
     })
       .then((auth) => {
-        localStorage.setItem('token', auth.token);
+        try { tg?.WebAppStorage?.setItem('token', auth.token); } catch { /* ignore */ }
+          localStorage.setItem('token', auth.token);
         setReady(true);
         const startParam = tg?.initDataUnsafe?.start_param || new URLSearchParams(location.search).get('tgWebAppStartParam') || '';
         return api('/start-param', { method: 'POST', body: JSON.stringify({ startParam }) });

@@ -9,7 +9,7 @@
     "test": "vitest run tests/core.test.ts",
     "typecheck": "tsc -b --noEmit",
     "lint": "eslint .",
-    "test:integration": "vitest run tests/core.test.ts",
+    "test:integration": "vitest run tests/integration.test.ts",
     "test:e2e": "playwright test",
     "db:status": "node scripts/db.mjs status",
     "db:migrate": "node scripts/db.mjs migrate",

@@ -17,37 +17,65 @@ export function createApp() {
   void migrate();
   const app = express();
   const bot = config.BOT_TOKEN && config.BOT_TOKEN !== 'TEST_TOKEN' ? new Bot(config.BOT_TOKEN) : null;
-  const botReady = bot ? bot.init().catch((error) => {
+  const botReady = bot ? bot.init().then(() => {
+    console.log(JSON.stringify({ ts: new Date().toISOString(), level: 'info', event: 'telegram_bot_ready' }));
+  }).catch((error) => {
     console.error(JSON.stringify({ ts: new Date().toISOString(), level: 'error', event: 'telegram_bot_init_failed', message: error instanceof Error ? error.message : String(error) }));
-    throw error;
+    bot.stop?.();
+    return Promise.resolve();
   }) : Promise.resolve();
   const ttlStore = createTtlStore(config);
   const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: config.MAX_UPLOAD_BYTES, files: 1 } });
 
   app.use((req, res, next) => { res.locals.requestId = nanoid(10); res.setHeader('x-request-id', res.locals.requestId); next(); });
+  app.use((req: any, res, next) => { req.start = Date.now(); next(); });
   app.use(helmet());
   app.use(cors({ origin: (origin, cb) => (!origin || !config.isProduction || origin === config.allowedOrigin ? cb(null, true) : cb(new Error('cors_denied'))), credentials: false }));
   app.use(express.json({ limit: '128kb' }));
+  app.use((req, res, next) => { if (!req.headers['x-request-id']) res.setHeader('x-request-id', res.locals.requestId); next(); });
+
+  const REQUEST_TIMEOUT_MS = 30_000;
+  app.use((req, res, next) => {
+    req.setTimeout(REQUEST_TIMEOUT_MS);
+    res.setTimeout(REQUEST_TIMEOUT_MS);
+    next();
+  });
 
   const distDir = path.resolve('dist');
   app.use(express.static(distDir));
 
+  app.use((req, res, next) => {
+    const start = Date.now();
+    (res as any).on('finish', () => {
+      log('info', 'http_request', {
+        method: req.method,
+        path: req.path,
+        status: res.statusCode,
+        durationMs: Date.now() - start,
+        requestId: res.locals.requestId,
+      });
+    });
+    next();
+  });
+
   function log(level: string, event: string, meta: Record<string, unknown> = {}) { console.log(JSON.stringify({ ts: new Date().toISOString(), level, event, ...meta })); }
-  function safeError(res: any, status: number, code: string, message = 'РћС€РёР±РєР° Р·Р°РїСЂРѕСЃР°') { return res.status(status).json({ error: { code, message, requestId: res.locals.requestId } }); }
+  function safeError(res: any, status: number, code: string, message = 'Ошибка запроса') { return res.status(status).json({ error: { code, message, requestId: res.locals.requestId } }); }
   async function limiter(req: any, res: any, next: any) {
-    try { const key = `rl:${req.path}:${req.userId || req.ip}`; const count = await ttlStore.incrWithTtl(key, 60); if (count > 80) return safeError(res, 429, 'rate_limited', 'РЎР»РёС€РєРѕРј РјРЅРѕРіРѕ Р·Р°РїСЂРѕСЃРѕРІ'); next(); }
-    catch { return safeError(res, 503, 'rate_limit_unavailable', 'РЎРµСЂРІРёСЃ РІСЂРµРјРµРЅРЅРѕ РЅРµРґРѕСЃС‚СѓРїРµРЅ'); }
+    try { const routeKey = req.route?.path || req.path; const key = `rl:${routeKey}:${req.userId || req.ip}`; const count = await ttlStore.incrWithTtl(key, 60); if (count > 80) return safeError(res, 429, 'rate_limited', 'Слишком много запросов'); next(); }
+    catch { return safeError(res, 503, 'rate_limit_unavailable', 'Сервис временно недоступен'); }
   }
   async function user(req: any, res: any, next: any) {
     const token = String(req.headers.authorization || '').replace(/^Bearer /, '');
     const raw = await ttlStore.get(`session:${hashToken(token)}`);
-    if (!raw) return safeError(res, 401, 'auth_required', 'РўСЂРµР±СѓРµС‚СЃСЏ РІС…РѕРґ С‡РµСЂРµР· Telegram');
+    if (!raw) return safeError(res, 401, 'auth_required', 'Требуется вход через Telegram');
     req.userId = JSON.parse(raw).userId; next();
   }
   function adminRole(roles: string[]) { return async (req: any, res: any, next: any) => {
+    if (!req.userId) return safeError(res, 401, 'auth_required', 'Требуется вход через Telegram');
     const u = await db.prepare('select telegram_id from users where id = ?').get(req.userId) as any;
-    const a = u && await db.prepare('select role from admin_users where telegram_id = ?').get(u.telegram_id) as any;
-    if (!a || !roles.includes(a.role)) { await audit(req.userId, 'admin_denied', 'route', req.path, 'denied'); return safeError(res, 403, 'admin_required', 'РќРµРґРѕСЃС‚Р°С‚РѕС‡РЅРѕ РїСЂР°РІ'); }
+    if (!u) return safeError(res, 401, 'auth_required', 'Требуется вход через Telegram');
+    const a = await db.prepare('select role from admin_users where telegram_id = ?').get(u.telegram_id) as any;
+    if (!a || !roles.includes(a.role)) { await audit(req.userId, 'admin_denied', 'route', req.path, 'denied'); return safeError(res, 403, 'admin_required', 'Недостаточно прав'); }
     req.adminRole = a.role; next();
   }; }
   async function audit(actor: number | null, action: string, objectType?: string, objectId?: string, result = 'ok', meta?: any) { await db.prepare('insert into audit_log(id,actor_user_id,action,object_type,object_id,result,meta) values(?,?,?,?,?,?,?)').run(nanoid(), actor, action, objectType || null, objectId || null, result, meta ? JSON.stringify(meta) : null); }

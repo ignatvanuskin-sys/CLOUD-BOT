@@ -75,8 +75,9 @@ GitHub Actions workflow is in `.github/workflows/ci.yml`: clean install, typeche
 
 ## Current residual risks
 
-- PostgreSQL adapter is prepared through schema/migration commands, but runtime DB access still uses current SQLite repository layer. Production config is intentionally blocked unless `DB_DRIVER=postgres`; full query adapter migration remains required before real production traffic.
+- PostgreSQL runtime adapter is implemented in `server/pg-db.ts`, but production traffic should be verified against real staging DB (backup/restore, connection pool limits, failover behavior).
 - S3 adapter is implemented; bucket policy/encryption/versioning must be verified externally.
 - Redis TTL store is implemented; production Redis TLS/connectivity must be verified externally.
 - Playwright e2e is added, but browser binaries/service execution may need CI cache/install setup.
 - Telegram Stars payment/refund cannot be evidenced without staging bot credentials.
+- `server/pg-db.ts` uses manual SQL translation for `INSERT OR IGNORE`/`CURRENT_TIMESTAMP`; further hardening should move runtime paths to fully parameterized queries with explicit `ON CONFLICT` clauses.

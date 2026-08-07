@@ -17,9 +17,11 @@ export interface StorageAdapter {
   healthy(): Promise<boolean>;
 }
 
-const config = loadConfig();
-const root = path.resolve(config.STORAGE_LOCAL_ROOT);
-if (!config.isProduction) fs.mkdirSync(root, { recursive: true });
+let cachedRoot: string | undefined;
+function getRoot() {
+  if (!cachedRoot) cachedRoot = path.resolve(loadConfig().STORAGE_LOCAL_ROOT);
+  return cachedRoot;
+}
 
 export function hashToken(token: string) { return crypto.createHash('sha256').update(token).digest('hex'); }
 export function createAssetKey(productId: string, version: string, assetId: string, fileName: string, quarantine = false) {
@@ -28,6 +30,7 @@ export function createAssetKey(productId: string, version: string, assetId: stri
   return `${quarantine ? 'quarantine' : 'products'}/${productId}/${version}/${assetId}${ext}`;
 }
 export function safeStoragePath(storageKey: string) {
+  const root = getRoot();
   if (!/^[a-zA-Z0-9/_.,-]{1,240}$/.test(storageKey) || storageKey.includes('..')) throw new Error('bad_storage_key');
   const resolved = path.resolve(root, storageKey);
   if (!resolved.startsWith(root + path.sep) && resolved !== root) throw new Error('bad_storage_key');
@@ -41,21 +44,21 @@ class LocalStorageAdapter implements StorageAdapter {
   async headObject(key: string) { const file = safeStoragePath(key); const stat = fs.statSync(file); return { size: stat.size }; }
   async createDownloadUrl(key: string) { return `/api/storage/local/${encodeURIComponent(key)}`; }
   async deleteObject(key: string) { const file = safeStoragePath(key); if (fs.existsSync(file)) fs.unlinkSync(file); }
-  async healthy() { return fs.existsSync(root); }
+  async healthy() { return fs.existsSync(getRoot()); }
 }
 
 class S3StorageAdapter implements StorageAdapter {
   private s3: S3Client;
-  constructor() { this.s3 = new S3Client({ region: config.S3_REGION, endpoint: config.S3_ENDPOINT, forcePathStyle: config.S3_FORCE_PATH_STYLE === 'true', credentials: { accessKeyId: config.S3_ACCESS_KEY_ID || '', secretAccessKey: config.S3_SECRET_ACCESS_KEY || '' } }); }
-  async putObject(input: PutObjectInput) { const body = input.body; const buffer = Buffer.isBuffer(body) ? body : typeof body === 'string' ? Buffer.from(body) : undefined; await this.s3.send(new PutObjectCommand({ Bucket: config.S3_BUCKET, Key: input.key, Body: body, ContentType: input.contentType, ChecksumSHA256: buffer ? checksum(buffer) : undefined })); const head = await this.headObject(input.key); return { key: input.key, size: head.size, checksum: head.checksum || (buffer ? checksum(buffer) : ''), contentType: input.contentType }; }
-  async getObject(key: string) { const out = await this.s3.send(new GetObjectCommand({ Bucket: config.S3_BUCKET, Key: key })); return out.Body as Readable; }
-  async headObject(key: string) { const out = await this.s3.send(new HeadObjectCommand({ Bucket: config.S3_BUCKET, Key: key })); return { size: Number(out.ContentLength || 0), checksum: out.ChecksumSHA256, contentType: out.ContentType }; }
-  async createDownloadUrl(key: string, ttlSeconds: number, fileName: string) { return getSignedUrl(this.s3, new GetObjectCommand({ Bucket: config.S3_BUCKET, Key: key, ResponseContentDisposition: `attachment; filename="${fileName.replace(/"/g, '')}"` }), { expiresIn: ttlSeconds }); }
+  constructor() { const c = loadConfig(); this.s3 = new S3Client({ region: c.S3_REGION, endpoint: c.S3_ENDPOINT, forcePathStyle: c.S3_FORCE_PATH_STYLE === 'true', credentials: { accessKeyId: c.S3_ACCESS_KEY_ID || '', secretAccessKey: c.S3_SECRET_ACCESS_KEY || '' } }); }
+  async putObject(input: PutObjectInput) { const body = input.body; const buffer = Buffer.isBuffer(body) ? body : typeof body === 'string' ? Buffer.from(body) : undefined; const c = loadConfig(); await this.s3.send(new PutObjectCommand({ Bucket: c.S3_BUCKET, Key: input.key, Body: body, ContentType: input.contentType, ChecksumSHA256: buffer ? checksum(buffer) : undefined })); const head = await this.headObject(input.key); return { key: input.key, size: head.size, checksum: head.checksum || (buffer ? checksum(buffer) : ''), contentType: input.contentType }; }
+  async getObject(key: string) { const c = loadConfig(); const out = await this.s3.send(new GetObjectCommand({ Bucket: c.S3_BUCKET, Key: key })); return out.Body as Readable; }
+  async headObject(key: string) { const c = loadConfig(); const out = await this.s3.send(new HeadObjectCommand({ Bucket: c.S3_BUCKET, Key: key })); return { size: Number(out.ContentLength || 0), checksum: out.ChecksumSHA256, contentType: out.ContentType }; }
+  async createDownloadUrl(key: string, ttlSeconds: number, fileName: string) { const c = loadConfig(); return getSignedUrl(this.s3, new GetObjectCommand({ Bucket: c.S3_BUCKET, Key: key, ResponseContentDisposition: `attachment; filename="${fileName.replace(/"/g, '')}"` }), { expiresIn: ttlSeconds }); }
   async deleteObject(key: string) { void key; throw new Error('delete_requires_explicit_policy'); }
-  async healthy() { try { if (!config.S3_BUCKET) return false; await this.s3.send(new HeadObjectCommand({ Bucket: config.S3_BUCKET, Key: '.healthcheck' })); return true; } catch { return Boolean(config.S3_BUCKET); } }
+  async healthy() { try { const c = loadConfig(); if (!c.S3_BUCKET) return false; await this.s3.send(new HeadObjectCommand({ Bucket: c.S3_BUCKET, Key: '.healthcheck' })); return true; } catch { return Boolean(loadConfig().S3_BUCKET); } }
 }
 
-export function createStorageAdapter(): StorageAdapter { return config.STORAGE_DRIVER === 's3' ? new S3StorageAdapter() : new LocalStorageAdapter(); }
+export function createStorageAdapter(): StorageAdapter { const c = loadConfig(); return c.STORAGE_DRIVER === 's3' ? new S3StorageAdapter() : new LocalStorageAdapter(); }
 export const storage = createStorageAdapter();
 
 export async function ensureDemoAsset(productId: string, version: string) {

@@ -1,4 +1,3 @@
-import 'dotenv/config';
 import { loadConfig } from './config';
 import { createPgDb, type DbClient } from './pg-db';
 import { createSqliteDb } from './sqlite-db';

@@ -1,4 +1,5 @@
 import Redis from 'ioredis';
+import type { AppConfig } from './config';
 import { loadConfig } from './config';
 
 export interface TtlStore {
@@ -32,7 +33,11 @@ class RedisStore implements TtlStore {
   async healthy() { try { return (await this.redis.ping()) === 'PONG'; } catch { return false; } }
 }
 
+const globalStore = new WeakMap<AppConfig, TtlStore>();
 export function createTtlStore(config = loadConfig()): TtlStore {
-  if (config.isProduction || config.REDIS_URL) return new RedisStore(config.REDIS_KEY_PREFIX, config.REDIS_URL || '', config.REDIS_TLS === 'true');
-  return new MemoryStore();
+  const cached = globalStore.get(config);
+  if (cached) return cached;
+  const store = config.isProduction || config.REDIS_URL ? new RedisStore(config.REDIS_KEY_PREFIX, config.REDIS_URL || '', config.REDIS_TLS === 'true') : new MemoryStore();
+  globalStore.set(config, store);
+  return store;
 }
