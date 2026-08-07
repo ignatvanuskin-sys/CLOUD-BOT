@@ -6,14 +6,23 @@ const config = loadConfig();
 export const db: DbClient = config.DB_DRIVER === 'postgres' ? createPgDb(config) : createSqliteDb(config);
 
 export async function migrate() {
-  if (config.DB_DRIVER === 'postgres') return;
+  if (config.DB_DRIVER === 'postgres') {
+    const { readFile } = await import('node:fs/promises');
+    const schema = await readFile(new URL('./db/postgres-schema.sql', import.meta.url), 'utf8');
+    await db.transaction(async (tx) => {
+      await tx.exec('select pg_advisory_xact_lock(42424242)');
+      await tx.exec(schema);
+      await tx.prepare("insert into schema_migrations(version) values(?) on conflict(version) do nothing").run('001_initial');
+    });
+    return;
+  }
   await db.exec(`
 CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY, telegram_id TEXT UNIQUE NOT NULL, name TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS products(id TEXT PRIMARY KEY, slug TEXT UNIQUE NOT NULL, type TEXT NOT NULL CHECK(type IN ('template','ready_bot','module','service')), category TEXT NOT NULL, title TEXT NOT NULL, result TEXT NOT NULL, description TEXT, stack TEXT, demo_url TEXT, preview TEXT, version TEXT NOT NULL DEFAULT '1.0.0', changelog TEXT, status TEXT NOT NULL DEFAULT 'published' CHECK(status IN ('draft','published','archived')), created_at TEXT DEFAULT CURRENT_TIMESTAMP, updated_at TEXT DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS license_plans(id TEXT PRIMARY KEY, product_id TEXT NOT NULL REFERENCES products(id), name TEXT NOT NULL, price_xtr INTEGER NOT NULL CHECK(price_xtr > 0), projects INTEGER NOT NULL DEFAULT 1, commercial INTEGER NOT NULL DEFAULT 0, support_days INTEGER NOT NULL DEFAULT 0, updates_days INTEGER NOT NULL DEFAULT 0, terms TEXT);
 CREATE TABLE IF NOT EXISTS orders(id TEXT PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id), product_id TEXT NOT NULL REFERENCES products(id), license_id TEXT NOT NULL REFERENCES license_plans(id), product_title TEXT, product_version TEXT, license_name TEXT, amount_xtr INTEGER NOT NULL CHECK(amount_xtr > 0), currency TEXT NOT NULL DEFAULT 'XTR', status TEXT NOT NULL CHECK(status IN ('pending','paid','fulfilled','expired','cancelled','delivery_failed','refund_pending','refunded')), invoice_link TEXT, payload TEXT UNIQUE NOT NULL, telegram_charge_id TEXT UNIQUE, refund_reason TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP, paid_at TEXT, fulfilled_at TEXT, refunded_at TEXT);
 CREATE TABLE IF NOT EXISTS entitlements(id TEXT PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id), product_id TEXT NOT NULL REFERENCES products(id), license_id TEXT NOT NULL REFERENCES license_plans(id), order_id TEXT UNIQUE NOT NULL REFERENCES orders(id), active INTEGER NOT NULL DEFAULT 1, created_at TEXT DEFAULT CURRENT_TIMESTAMP, revoked_at TEXT);
-CREATE TABLE IF NOT EXISTS product_assets(id TEXT PRIMARY KEY, product_id TEXT NOT NULL REFERENCES products(id), version TEXT NOT NULL, storage_key TEXT NOT NULL, file_name TEXT NOT NULL, mime_type TEXT NOT NULL DEFAULT 'application/zip', size_bytes INTEGER NOT NULL DEFAULT 0, checksum_sha256 TEXT, status TEXT NOT NULL DEFAULT 'published', scan_findings TEXT, quarantine_key TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS product_assets(id TEXT PRIMARY KEY, product_id TEXT NOT NULL REFERENCES products(id), version TEXT NOT NULL, storage_key TEXT NOT NULL, file_name TEXT NOT NULL, mime_type TEXT NOT NULL DEFAULT 'application/zip', size_bytes INTEGER NOT NULL DEFAULT 0, checksum_sha256 TEXT, status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','scanning','approved','rejected','published','deleted')), scan_findings TEXT, quarantine_key TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS delivery_events(id TEXT PRIMARY KEY, entitlement_id TEXT NOT NULL REFERENCES entitlements(id), asset_id TEXT REFERENCES product_assets(id), token_hash TEXT UNIQUE NOT NULL, expires_at INTEGER NOT NULL, used_at TEXT, status TEXT NOT NULL DEFAULT 'issued', created_at TEXT DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS analytics(id INTEGER PRIMARY KEY, user_id INTEGER, event TEXT, product_id TEXT, meta TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS support_requests(id TEXT PRIMARY KEY, user_id INTEGER, message TEXT, status TEXT DEFAULT 'open', created_at TEXT DEFAULT CURRENT_TIMESTAMP);

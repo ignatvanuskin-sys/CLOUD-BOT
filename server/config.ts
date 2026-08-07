@@ -3,10 +3,10 @@ import { z } from 'zod';
 const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(8787),
-  BOT_TOKEN: z.string().optional(),
-  BOT_USERNAME: z.string().optional(),
+  BOT_TOKEN: z.union([z.string().regex(/^\d+:[A-Za-z0-9_-]{20,}$/), z.literal('TEST_TOKEN')]).optional(),
+  BOT_USERNAME: z.string().regex(/^[A-Za-z0-9_]{5,32}$/).optional(),
   WEBAPP_URL: z.string().url().optional(),
-  WEBHOOK_SECRET: z.string().min(16).optional(),
+  WEBHOOK_SECRET: z.string().min(16).max(256).regex(/^[A-Za-z0-9_-]+$/).optional(),
   CORS_ORIGIN: z.string().url().optional(),
 
   DB_DRIVER: z.enum(['sqlite', 'postgres']).default('sqlite'),
@@ -50,6 +50,9 @@ export function loadConfig(env = process.env): AppConfig {
       if (!config[key]) missing.push(key);
     }
     if (config.ALLOW_DEV_LOGIN === 'true') missing.push('ALLOW_DEV_LOGIN must be false in production');
+    for (const [key, value] of [['WEBAPP_URL', config.WEBAPP_URL], ['CORS_ORIGIN', config.CORS_ORIGIN]] as const) {
+      if (value && new URL(value).protocol !== 'https:') missing.push(`${key} must use https in production`);
+    }
     if (config.DB_DRIVER !== 'postgres') missing.push('DB_DRIVER must be postgres in production');
     if (config.STORAGE_DRIVER !== 's3') missing.push('STORAGE_DRIVER must be s3 in production');
     const onRailway = process.env.RAILWAY_ENVIRONMENT_NAME === 'production' || Boolean(process.env.RAILWAY_PROJECT_ID);

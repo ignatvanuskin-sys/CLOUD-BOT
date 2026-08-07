@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { Readable } from 'node:stream';
-import { GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { GetObjectCommand, HeadBucketCommand, HeadObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { loadConfig } from './config';
 
@@ -32,6 +32,7 @@ export function safeStoragePath(storageKey: string) {
   return resolved;
 }
 function checksum(data: Buffer) { return crypto.createHash('sha256').update(data).digest('hex'); }
+function checksumBase64(data: Buffer) { return crypto.createHash('sha256').update(data).digest('base64'); }
 
 class LocalStorageAdapter implements StorageAdapter {
   private root: string;
@@ -47,12 +48,12 @@ class LocalStorageAdapter implements StorageAdapter {
 class S3StorageAdapter implements StorageAdapter {
   private s3: S3Client;
   constructor() { const c = loadConfig(); this.s3 = new S3Client({ region: c.S3_REGION, endpoint: c.S3_ENDPOINT, forcePathStyle: c.S3_FORCE_PATH_STYLE === 'true', credentials: { accessKeyId: c.S3_ACCESS_KEY_ID || '', secretAccessKey: c.S3_SECRET_ACCESS_KEY || '' } }); }
-  async putObject(input: PutObjectInput) { const body = input.body; const buffer = Buffer.isBuffer(body) ? body : typeof body === 'string' ? Buffer.from(body) : undefined; const c = loadConfig(); await this.s3.send(new PutObjectCommand({ Bucket: c.S3_BUCKET, Key: input.key, Body: body, ContentType: input.contentType, ChecksumSHA256: buffer ? checksum(buffer) : undefined })); const head = await this.headObject(input.key); return { key: input.key, size: head.size, checksum: head.checksum || (buffer ? checksum(buffer) : ''), contentType: input.contentType }; }
+  async putObject(input: PutObjectInput) { const body = input.body; const buffer = Buffer.isBuffer(body) ? body : typeof body === 'string' ? Buffer.from(body) : undefined; const c = loadConfig(); await this.s3.send(new PutObjectCommand({ Bucket: c.S3_BUCKET, Key: input.key, Body: body, ContentType: input.contentType, ChecksumSHA256: buffer ? checksumBase64(buffer) : undefined })); const head = await this.headObject(input.key); return { key: input.key, size: head.size, checksum: buffer ? checksum(buffer) : head.checksum || '', contentType: input.contentType }; }
   async getObject(key: string) { const c = loadConfig(); const out = await this.s3.send(new GetObjectCommand({ Bucket: c.S3_BUCKET, Key: key })); return out.Body as Readable; }
   async headObject(key: string) { const c = loadConfig(); const out = await this.s3.send(new HeadObjectCommand({ Bucket: c.S3_BUCKET, Key: key })); return { size: Number(out.ContentLength || 0), checksum: out.ChecksumSHA256, contentType: out.ContentType }; }
   async createDownloadUrl(key: string, ttlSeconds: number, fileName: string) { const c = loadConfig(); return getSignedUrl(this.s3, new GetObjectCommand({ Bucket: c.S3_BUCKET, Key: key, ResponseContentDisposition: `attachment; filename="${fileName.replace(/"/g, '')}"` }), { expiresIn: ttlSeconds }); }
   async deleteObject(key: string) { void key; throw new Error('delete_requires_explicit_policy'); }
-  async healthy() { try { const c = loadConfig(); if (!c.S3_BUCKET) return false; await this.s3.send(new HeadObjectCommand({ Bucket: c.S3_BUCKET, Key: '.healthcheck' })); return true; } catch { return Boolean(loadConfig().S3_BUCKET); } }
+  async healthy() { try { const c = loadConfig(); if (!c.S3_BUCKET) return false; await this.s3.send(new HeadBucketCommand({ Bucket: c.S3_BUCKET })); return true; } catch { return false; } }
 }
 
 export function createStorageAdapter(): StorageAdapter { const c = loadConfig(); return c.STORAGE_DRIVER === 's3' ? new S3StorageAdapter() : new LocalStorageAdapter(); }

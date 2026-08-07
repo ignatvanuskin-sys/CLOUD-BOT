@@ -11,6 +11,10 @@ declare global {
 
 const tg = window.Telegram?.WebApp;
 
+function readToken() { try { return localStorage.getItem('token'); } catch { return null; } }
+function saveToken(token: string) { try { localStorage.setItem('token', token); } catch { /* private WebView storage may be unavailable */ } }
+function clearToken() { try { localStorage.removeItem('token'); } catch { /* already unavailable */ } }
+
 type Product = {
   id: string;
   slug: string;
@@ -38,10 +42,7 @@ type Plan = {
 };
 
 async function api(path: string, opts: RequestInit = {}) {
-  const storage = tg?.WebAppStorage;
-  let token: string | null = null;
-  try { token = await storage?.getItem('token'); } catch { /* ignore */ }
-  if (!token) token = localStorage.getItem('token');
+  const token = readToken();
   const response = await fetch('/api' + path, {
     ...opts,
     headers: {
@@ -55,6 +56,7 @@ async function api(path: string, opts: RequestInit = {}) {
     const body = await response.json().catch(() => ({ error: response.statusText }));
     const error = body?.error;
     const message = typeof error === 'string' ? error : error?.message || error?.code || 'request_failed';
+    if (response.status === 401 && path !== '/auth/telegram') clearToken();
     throw new Error(message);
   }
 
@@ -84,21 +86,20 @@ function App() {
       method: 'POST',
       body: JSON.stringify({ initData, devTelegramId: import.meta.env.DEV ? '777' : undefined }),
     })
-      .then((auth) => {
-        try { tg?.WebAppStorage?.setItem('token', auth.token); } catch { /* ignore */ }
-          localStorage.setItem('token', auth.token);
+      .then(async (auth) => {
+        saveToken(auth.token);
+        const launch = new URLSearchParams(location.hash.slice(1));
+        const startParam = tg?.initDataUnsafe?.start_param || launch.get('tgWebAppStartParam') || new URLSearchParams(location.search).get('startapp') || '';
+        try {
+          const parsed = await api('/start-param', { method: 'POST', body: JSON.stringify({ startParam }) });
+          if (parsed?.kind === 'product') setPage({ name: 'product', id: parsed.id });
+          if (parsed?.kind === 'category') setFilter(parsed.slug);
+        } catch (error) {
+          console.error('start_param_failed', error);
+        }
         setReady(true);
-        const startParam = tg?.initDataUnsafe?.start_param || new URLSearchParams(location.search).get('tgWebAppStartParam') || '';
-        return api('/start-param', { method: 'POST', body: JSON.stringify({ startParam }) });
       })
-      .then((parsed) => {
-        if (parsed?.kind === 'product') setPage({ name: 'product', id: parsed.id });
-        if (parsed?.kind === 'category') setFilter(parsed.slug);
-      })
-      .catch((e) => {
-        setErr(e.message);
-        setReady(true);
-      });
+      .catch((e) => { setErr(e.message); setReady(true); });
   }, []);
 
   useEffect(() => {
@@ -124,7 +125,7 @@ function App() {
   if (err) return <Shell><State title="Ошибка" text={err} /></Shell>;
   if (page.name === 'product') return <ProductPage id={page.id} back={() => setPage({ name: 'home' })} />;
   if (page.name === 'purchases') return <Purchases back={() => setPage({ name: 'home' })} />;
-  if (page.name === 'admin') return <Admin back={() => setPage({ name: 'home' })} onLogout={() => { try { tg?.WebAppStorage?.removeItem('token'); } catch { /* ignore */ } localStorage.removeItem('token'); setReady(false); setPage({ name: 'home' }); }} />;
+  if (page.name === 'admin') return <Admin back={() => setPage({ name: 'home' })} onLogout={() => { clearToken(); setReady(false); setPage({ name: 'home' }); }} />;
 
   return <Shell><Hero /><SearchBox q={q} setQ={setQ} /><Categories active={filter} set={setFilter} /><Section title="Популярное" items={products.slice(0, 3)} open={(id: string) => setPage({ name: 'product', id })} /><Section title="Новые шаблоны" items={products.slice(3)} open={(id: string) => setPage({ name: 'product', id })} /><button className="ghost" onClick={() => setPage({ name: 'purchases' })}>Мои покупки</button><button className="ghost" onClick={() => setPage({ name: 'admin' })}><Plus size={16} /> Админ</button></Shell>;
 }
@@ -176,7 +177,7 @@ function Admin({ back, onLogout }: { back: () => void; onLogout: () => void }) {
   const [title, setTitle] = useState('');
   const [out, setOut] = useState('');
   async function add() { const result = await api('/admin/products', { method: 'POST', body: JSON.stringify({ title, result: 'Новый результат для бизнеса', type: 'template', category: 'store', status: 'draft' }) }); setOut('Создан черновик ' + result.id); }
-  async function logout() { try { tg?.WebAppStorage?.removeItem('token'); } catch { /* ignore */ } localStorage.removeItem('token'); onLogout(); }
+  async function logout() { try { await api('/auth/logout', { method: 'POST' }); } finally { clearToken(); onLogout(); } }
   return <Shell><button className="back" onClick={back}><ArrowLeft /> Назад</button><h1>Админ: товар</h1><input className="adminInput" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Название товара" /><button className="main" disabled={!title.trim()} onClick={add}>Добавить товар</button><button className="main" style={{marginTop:8}} onClick={logout}>Выйти</button>{out && <p>{out}</p>}</Shell>;
 }
 

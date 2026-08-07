@@ -76,10 +76,10 @@ try {
   else if (cmd === 'migrate') await migrate();
   else if (cmd === 'rollback') console.log('No destructive rollback is automated for 001_initial. Restore from backup if needed.');
   else if (cmd === 'backup') console.log('Use provider backup or pg_dump with a secret-managed DATABASE_URL. Do not print credentials.');
-  else if (cmd === 'import-sqlite') console.log('Dry-run placeholder: export SQLite tables, verify counts, import through COPY inside transaction. See docs/runbooks/db-migration.md');
+
   else if (cmd === 'verify-import') await verifyImport();
   else {
-    console.error('usage: node scripts/db.mjs status|migrate|rollback|backup|import-sqlite|verify-import');
+    console.error('usage: node scripts/db.mjs status|migrate|rollback|backup|verify-import');
     process.exit(1);
   }
 } finally {

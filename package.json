@@ -6,7 +6,7 @@
     "preview": "vite preview --host 0.0.0.0",
     "server": "tsx server/index.ts",
     "seed": "tsx server/seed.ts",
-    "test": "vitest run tests/core.test.ts",
+    "test": "vitest run tests/core.test.ts tests/telegram.test.ts",
     "typecheck": "tsc -b --noEmit",
     "lint": "eslint .",
     "test:integration": "vitest run tests/integration.test.ts",
@@ -15,7 +15,7 @@
     "db:migrate": "node scripts/db.mjs migrate",
     "db:rollback": "node scripts/db.mjs rollback",
     "db:backup": "node scripts/db.mjs backup",
-    "db:import-sqlite": "node scripts/db.mjs import-sqlite",
+
     "db:verify-import": "node scripts/db.mjs verify-import",
     "security:scan": "node scripts/security-scan.mjs",
     "deps:audit": "npm audit --audit-level=high",

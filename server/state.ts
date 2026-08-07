@@ -16,20 +16,26 @@ class MemoryStore implements TtlStore {
   async get(key: string) { const v = this.values.get(key); if (!v || v.expiresAt < Date.now()) { this.values.delete(key); return null; } return v.value; }
   async set(key: string, value: string, ttlSeconds: number) { this.values.set(key, { value, expiresAt: Date.now() + ttlSeconds * 1000 }); }
   async del(key: string) { this.values.delete(key); }
-  async incrWithTtl(key: string, ttlSeconds: number) { const current = Number(await this.get(key) || '0') + 1; await this.set(key, String(current), ttlSeconds); return current; }
+  async incrWithTtl(key: string, ttlSeconds: number) { const existing = this.values.get(key); const current = Number(await this.get(key) || '0') + 1; this.values.set(key, { value: String(current), expiresAt: existing?.expiresAt && existing.expiresAt > Date.now() ? existing.expiresAt : Date.now() + ttlSeconds * 1000 }); return current; }
   async close() { this.values.clear(); }
   async healthy() { return true; }
 }
 
 class RedisStore implements TtlStore {
   private redis: Redis;
-  constructor(private prefix: string, url: string, tls: boolean) { this.redis = new Redis(url, { lazyConnect: false, tls: tls ? {} : undefined, maxRetriesPerRequest: 2, connectTimeout: 3000 }); }
+  constructor(private prefix: string, url: string, tls: boolean) {
+    this.redis = new Redis(url, { lazyConnect: false, tls: tls ? {} : undefined, maxRetriesPerRequest: 2, connectTimeout: 3000 });
+    this.redis.on('error', (error) => console.error(JSON.stringify({ ts: new Date().toISOString(), level: 'error', event: 'redis_error', errorType: error.name, message: error.message })));
+  }
   private k(key: string) { return this.prefix + key; }
   async get(key: string) { return this.redis.get(this.k(key)); }
   async set(key: string, value: string, ttlSeconds: number) { await this.redis.set(this.k(key), value, 'EX', ttlSeconds); }
   async del(key: string) { await this.redis.del(this.k(key)); }
-  async incrWithTtl(key: string, ttlSeconds: number) { const multi = this.redis.multi(); multi.incr(this.k(key)); multi.expire(this.k(key), ttlSeconds); const result = await multi.exec(); return Number(result?.[0]?.[1] || 0); }
-  async close() { this.redis.disconnect(); }
+  async incrWithTtl(key: string, ttlSeconds: number) {
+    const result = await this.redis.eval("local n=redis.call('INCR',KEYS[1]); if n==1 then redis.call('EXPIRE',KEYS[1],ARGV[1]); end; return n", 1, this.k(key), ttlSeconds);
+    return Number(result);
+  }
+  async close() { await this.redis.quit().catch(() => { this.redis.disconnect(); }); }
   async healthy() { try { return (await this.redis.ping()) === 'PONG'; } catch { return false; } }
 }
 
