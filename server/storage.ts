@@ -17,12 +17,6 @@ export interface StorageAdapter {
   healthy(): Promise<boolean>;
 }
 
-let cachedRoot: string | undefined;
-function getRoot() {
-  if (!cachedRoot) cachedRoot = path.resolve(loadConfig().STORAGE_LOCAL_ROOT);
-  return cachedRoot;
-}
-
 export function hashToken(token: string) { return crypto.createHash('sha256').update(token).digest('hex'); }
 export function createAssetKey(productId: string, version: string, assetId: string, fileName: string, quarantine = false) {
   const ext = path.extname(fileName).toLowerCase() || '.bin';
@@ -30,7 +24,8 @@ export function createAssetKey(productId: string, version: string, assetId: stri
   return `${quarantine ? 'quarantine' : 'products'}/${productId}/${version}/${assetId}${ext}`;
 }
 export function safeStoragePath(storageKey: string) {
-  const root = getRoot();
+  const c = loadConfig();
+  const root = path.resolve(c.STORAGE_LOCAL_ROOT);
   if (!/^[a-zA-Z0-9/_.,-]{1,240}$/.test(storageKey) || storageKey.includes('..')) throw new Error('bad_storage_key');
   const resolved = path.resolve(root, storageKey);
   if (!resolved.startsWith(root + path.sep) && resolved !== root) throw new Error('bad_storage_key');
@@ -39,12 +34,14 @@ export function safeStoragePath(storageKey: string) {
 function checksum(data: Buffer) { return crypto.createHash('sha256').update(data).digest('hex'); }
 
 class LocalStorageAdapter implements StorageAdapter {
+  private root: string;
+  constructor() { const c = loadConfig(); this.root = path.resolve(c.STORAGE_LOCAL_ROOT); fs.mkdirSync(this.root, { recursive: true }); }
   async putObject(input: PutObjectInput) { const file = safeStoragePath(input.key); fs.mkdirSync(path.dirname(file), { recursive: true }); const buffer = Buffer.isBuffer(input.body) ? input.body : Buffer.from(String(input.body)); fs.writeFileSync(file, buffer); return { key: input.key, size: buffer.length, checksum: checksum(buffer), contentType: input.contentType }; }
   async getObject(key: string) { const file = safeStoragePath(key); if (!fs.existsSync(file)) throw new Error('storage_not_found'); return fs.createReadStream(file); }
   async headObject(key: string) { const file = safeStoragePath(key); const stat = fs.statSync(file); return { size: stat.size }; }
   async createDownloadUrl(key: string) { return `/api/storage/local/${encodeURIComponent(key)}`; }
   async deleteObject(key: string) { const file = safeStoragePath(key); if (fs.existsSync(file)) fs.unlinkSync(file); }
-  async healthy() { return fs.existsSync(getRoot()); }
+  async healthy() { return fs.existsSync(this.root); }
 }
 
 class S3StorageAdapter implements StorageAdapter {

@@ -176,7 +176,8 @@ function Admin({ back }: { back: () => void }) {
   const [title, setTitle] = useState('');
   const [out, setOut] = useState('');
   async function add() { const result = await api('/admin/products', { method: 'POST', body: JSON.stringify({ title, result: 'Новый результат для бизнеса', type: 'template', category: 'store', status: 'draft' }) }); setOut('Создан черновик ' + result.id); }
-  return <Shell><button className="back" onClick={back}><ArrowLeft /> Назад</button><h1>Админ: товар</h1><input className="adminInput" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Название товара" /><button className="main" disabled={!title.trim()} onClick={add}>Добавить товар</button>{out && <p>{out}</p>}</Shell>;
+  async function logout() { try { tg?.WebAppStorage?.removeItem('token'); } catch { /* ignore */ } localStorage.removeItem('token'); setReady(false); setPage({ name: 'home' }); }
+  return <Shell><button className="back" onClick={back}><ArrowLeft /> Назад</button><h1>Админ: товар</h1><input className="adminInput" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Название товара" /><button className="main" disabled={!title.trim()} onClick={add}>Добавить товар</button><button className="main" style={{marginTop:8}} onClick={logout}>Выйти</button>{out && <p>{out}</p>}</Shell>;
 }
 
 function Loader({ text }: { text: string }) { return <div className="state"><div className="spin" /><h2>{text}</h2></div>; }
