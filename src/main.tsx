@@ -69,9 +69,17 @@ function App() {
   useEffect(() => {
     tg?.ready();
     tg?.expand();
+    const initData = tg?.initData || new URLSearchParams(location.hash.slice(1)).get('tgWebAppData') || '';
+    if (!initData) {
+      const hasTelegram = Boolean(window.Telegram?.WebApp);
+      const platform = tg?.platform || 'unknown';
+      setErr(`Telegram не передал initData. Откройте приложение именно через Mini App/Menu Button. Диагностика: Telegram.WebApp=${hasTelegram ? 'yes' : 'no'}, platform=${platform}, hash=${location.hash ? 'present' : 'empty'}.`);
+      setReady(true);
+      return;
+    }
     api('/auth/telegram', {
       method: 'POST',
-      body: JSON.stringify({ initData: tg?.initData || '', devTelegramId: import.meta.env.DEV ? '777' : undefined }),
+      body: JSON.stringify({ initData, devTelegramId: import.meta.env.DEV ? '777' : undefined }),
     })
       .then((auth) => {
         localStorage.setItem('token', auth.token);
