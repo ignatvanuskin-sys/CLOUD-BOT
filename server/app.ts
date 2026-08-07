@@ -191,12 +191,6 @@ export function createApp() {
 
   if (bot) {
   app.post('/api/admin/assets/:id/publish', user, adminRole(['owner','editor']), limiter, async (req: any, res) => { const asset = await db.prepare('select * from product_assets where id=?').get(req.params.id) as any; if (!asset || !['approved','published'].includes(asset.status)) return safeError(res, 409, 'asset_not_approved', 'Asset не прошёл проверку'); await db.prepare("update product_assets set status='published' where id=?").run(asset.id); await audit(req.userId,'asset_publish','asset',asset.id); res.json({ ok: true }); });
-  app.post('/api/auth/logout', user, async (req: any, res) => { const token = String(req.headers.authorization || '').replace(/^Bearer /, ''); await ttlStore.del(`session:${hashToken(token)}`); await event(req.userId, 'logout'); res.json({ ok: true }); });
-
-  if (bot) {
-
-  if (bot) {
-    bot.command('start', (ctx) => ctx.reply('Открой каталог шаблонов ботов', { reply_markup: new InlineKeyboard().webApp('Открыть магазин', config.WEBAPP_URL || 'https://example.com') }));
     bot.command('terms', (ctx) => ctx.reply('Terms: цифровой товар, доступ после оплаты Stars. Возвраты через поддержку.'));
     bot.command('support', (ctx) => ctx.reply('Поддержка: напишите сообщение с номером заказа.'));
     bot.command('paysupport', (ctx) => ctx.reply('Вопросы по платежам Stars и возвратам принимаются здесь.'));

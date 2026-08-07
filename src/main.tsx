@@ -124,7 +124,7 @@ function App() {
   if (err) return <Shell><State title="Ошибка" text={err} /></Shell>;
   if (page.name === 'product') return <ProductPage id={page.id} back={() => setPage({ name: 'home' })} />;
   if (page.name === 'purchases') return <Purchases back={() => setPage({ name: 'home' })} />;
-  if (page.name === 'admin') return <Admin back={() => setPage({ name: 'home' })} />;
+  if (page.name === 'admin') return <Admin back={() => setPage({ name: 'home' })} onLogout={() => { try { tg?.WebAppStorage?.removeItem('token'); } catch { /* ignore */ } localStorage.removeItem('token'); setReady(false); setPage({ name: 'home' }); }} />;
 
   return <Shell><Hero /><SearchBox q={q} setQ={setQ} /><Categories active={filter} set={setFilter} /><Section title="Популярное" items={products.slice(0, 3)} open={(id: string) => setPage({ name: 'product', id })} /><Section title="Новые шаблоны" items={products.slice(3)} open={(id: string) => setPage({ name: 'product', id })} /><button className="ghost" onClick={() => setPage({ name: 'purchases' })}>Мои покупки</button><button className="ghost" onClick={() => setPage({ name: 'admin' })}><Plus size={16} /> Админ</button></Shell>;
 }
@@ -172,11 +172,11 @@ function Purchases({ back }: { back: () => void }) {
   return <Shell><button className="back" onClick={back}><ArrowLeft /> Назад</button><h1>Мои покупки</h1>{msg && <p className="notice">{msg}</p>}{items.length ? items.map((item) => <div className="row" key={item.id}><b>{item.title}</b><span>{item.license_name} · v{item.version}</span><button onClick={() => download(item.id)}><Download size={16} /> Скачать</button></div>) : <State title="Покупок нет" text="После оплаты здесь появятся файлы, инструкции и обновления." />}</Shell>;
 }
 
-function Admin({ back }: { back: () => void }) {
+function Admin({ back, onLogout }: { back: () => void; onLogout: () => void }) {
   const [title, setTitle] = useState('');
   const [out, setOut] = useState('');
   async function add() { const result = await api('/admin/products', { method: 'POST', body: JSON.stringify({ title, result: 'Новый результат для бизнеса', type: 'template', category: 'store', status: 'draft' }) }); setOut('Создан черновик ' + result.id); }
-  async function logout() { try { tg?.WebAppStorage?.removeItem('token'); } catch { /* ignore */ } localStorage.removeItem('token'); setReady(false); setPage({ name: 'home' }); }
+  async function logout() { try { tg?.WebAppStorage?.removeItem('token'); } catch { /* ignore */ } localStorage.removeItem('token'); onLogout(); }
   return <Shell><button className="back" onClick={back}><ArrowLeft /> Назад</button><h1>Админ: товар</h1><input className="adminInput" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Название товара" /><button className="main" disabled={!title.trim()} onClick={add}>Добавить товар</button><button className="main" style={{marginTop:8}} onClick={logout}>Выйти</button>{out && <p>{out}</p>}</Shell>;
 }
 
