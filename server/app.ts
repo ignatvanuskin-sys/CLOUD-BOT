@@ -17,6 +17,10 @@ export function createApp() {
   void migrate();
   const app = express();
   const bot = config.BOT_TOKEN && config.BOT_TOKEN !== 'TEST_TOKEN' ? new Bot(config.BOT_TOKEN) : null;
+  const botReady = bot ? bot.init().catch((error) => {
+    console.error(JSON.stringify({ ts: new Date().toISOString(), level: 'error', event: 'telegram_bot_init_failed', message: error instanceof Error ? error.message : String(error) }));
+    throw error;
+  }) : Promise.resolve();
   const ttlStore = createTtlStore(config);
   const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: config.MAX_UPLOAD_BYTES, files: 1 } });
 
@@ -122,6 +126,7 @@ export function createApp() {
       return res.json({ ok: true });
     }
     if (bot) {
+      await botReady;
       await bot.handleUpdate(update);
       return res.json({ ok: true, handled_by: 'grammy' });
     }
