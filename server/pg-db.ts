@@ -1,4 +1,4 @@
-import postgres from 'postgres';
+import { Pool } from 'pg';
 import type { AppConfig } from './config';
 
 export type DbStatement = {
@@ -14,20 +14,9 @@ export type DbClient = {
   close(): Promise<void>;
 };
 
-const postgresKeywords = [
-  'CREATE TABLE',
-  'CREATE INDEX',
-  'INSERT INTO schema_migrations',
-  'BEGIN',
-  'COMMIT',
-  'ROLLBACK',
-  'SELECT to_regclass',
-  'SELECT pg_advisory_lock',
-];
-
-function looksLikeNonParameterized(sql: string) {
-  const upper = sql.trim().toUpperCase();
-  return !postgresKeywords.some((k) => upper.startsWith(k)) && !/\?/.test(sql);
+function toPg(sql: string): string {
+  let i = 0;
+  return sql.replace(/\?/g, () => `$${++i}`);
 }
 
 function translateSql(sql: string) {
@@ -43,38 +32,56 @@ function translateSql(sql: string) {
 
 export function createPgDb(config: AppConfig): DbClient {
   if (!config.DATABASE_URL) throw new Error('DATABASE_URL required');
-  const sql = postgres(config.DATABASE_URL, {
+  const pool = new Pool({
+    connectionString: config.DATABASE_URL,
     ssl: config.DATABASE_SSL === 'true' ? { rejectUnauthorized: config.DATABASE_SSL_REJECT_UNAUTHORIZED === 'true' } : false,
     max: config.DATABASE_POOL_MAX,
-    idle_timeout: 20,
-    connect_timeout: 10,
+    idleTimeoutMillis: 20000,
+    connectionTimeoutMillis: 10000,
   });
+
+  let txClient: any = null;
+  const executor = () => txClient || pool;
 
   return {
     prepare(text: string) {
       return {
         async get(...args: unknown[]) {
           const t = translateSql(text);
-          if (!looksLikeNonParameterized(t)) return (await (sql as any)(t, ...args))[0];
-          throw new Error('pg-db: prepare() requires parameterized SQL for runtime queries');
+          const r = await executor().query(toPg(t), args);
+          return r.rows[0];
         },
         async all(...args: unknown[]) {
           const t = translateSql(text);
-          if (!looksLikeNonParameterized(t)) return [...(await (sql as any)(t, ...args))];
-          throw new Error('pg-db: prepare() requires parameterized SQL for runtime queries');
+          const r = await executor().query(toPg(t), args);
+          return r.rows;
         },
         async run(...args: unknown[]) {
           const t = translateSql(text);
-          if (!looksLikeNonParameterized(t)) {
-            const rows = await (sql as any)(t, ...args);
-            return { changes: typeof rows.count === 'number' ? rows.count : (Array.isArray(rows) ? rows.length : 0) };
-          }
-          throw new Error('pg-db: prepare() requires parameterized SQL for runtime queries');
+          const r = await executor().query(toPg(t), args);
+          return { changes: r.rowCount ?? (Array.isArray(r.rows) ? r.rows.length : 0) };
         },
       };
     },
-    async exec(text: string) { await (sql as any)(translateSql(text)); },
-    async transaction<T>(fn: () => Promise<T>) { return sql.begin(async () => await fn()) as any as Promise<T>; },
-    async close() { await sql.end({ timeout: 2 }); },
+    async exec(text: string) { const client = executor(); await client.query(toPg(translateSql(text))); },
+    async transaction<T>(fn: () => Promise<T>) {
+      const client = await pool.connect();
+      const prev = txClient;
+      txClient = client;
+      try {
+        await client.query('BEGIN');
+        const result = await fn();
+        await client.query('COMMIT');
+        return result;
+      } catch (error) {
+        try { await client.query('ROLLBACK'); } catch { /* ignore */ }
+        throw error;
+      } finally {
+        client.release();
+        txClient = prev;
+      }
+    },
+    async close() { await pool.end(); },
   };
 }
+

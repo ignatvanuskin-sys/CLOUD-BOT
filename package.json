@@ -56,6 +56,7 @@
     "@types/express": "latest",
     "@types/multer": "^2.2.0",
     "@types/node": "latest",
+    "@types/pg": "^8.20.4",
     "@types/react": "latest",
     "@types/react-dom": "latest",
     "@types/supertest": "^7.2.1",
