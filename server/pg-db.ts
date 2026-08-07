@@ -55,18 +55,18 @@ export function createPgDb(config: AppConfig): DbClient {
       return {
         async get(...args: unknown[]) {
           const t = translateSql(text);
-          if (!looksLikeNonParameterized(t)) return (await (sql as any)(t, ...args))[0];
+          if (!looksLikeNonParameterized(t)) return (await (sql as any).query(t, ...args))[0];
           throw new Error('pg-db: prepare() requires parameterized SQL for runtime queries');
         },
         async all(...args: unknown[]) {
           const t = translateSql(text);
-          if (!looksLikeNonParameterized(t)) return [...(await (sql as any)(t, ...args))];
+          if (!looksLikeNonParameterized(t)) return [...(await (sql as any).query(t, ...args))];
           throw new Error('pg-db: prepare() requires parameterized SQL for runtime queries');
         },
         async run(...args: unknown[]) {
           const t = translateSql(text);
           if (!looksLikeNonParameterized(t)) {
-            const rows = await (sql as any)(t, ...args);
+            const rows = await (sql as any).query(t, ...args);
             return { changes: typeof rows.count === 'number' ? rows.count : (Array.isArray(rows) ? rows.length : 0) };
           }
           throw new Error('pg-db: prepare() requires parameterized SQL for runtime queries');
