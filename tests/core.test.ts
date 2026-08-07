@@ -44,11 +44,11 @@ describe('telegram mini app core', () => {
 describe('api hardening smoke', () => {
   beforeEach(async () => {
     process.env.NODE_ENV = 'test'; process.env.ALLOW_DEV_LOGIN = 'true'; process.env.DB_DRIVER = 'sqlite'; process.env.STORAGE_DRIVER = 'local'; process.env.DATABASE_PATH = './data/test.sqlite'; process.env.WEBHOOK_SECRET = 'test-secret-token-123';
-    const { db, migrate } = await import('../server/db'); migrate(); db.exec('delete from webhook_updates; delete from delivery_events; delete from entitlements; delete from orders; delete from product_assets; delete from license_plans; delete from products; delete from users; delete from admin_users;');
-    db.prepare('insert into products(id,slug,type,category,title,result,version,status) values(?,?,?,?,?,?,?,?)').run('p1','p1','template','ai','P1','R','1.0.0','published');
-    db.prepare('insert into license_plans(id,product_id,name,price_xtr,projects,commercial,support_days,updates_days) values(?,?,?,?,?,?,?,?)').run('l1','p1','PRO',100,1,1,30,90);
+    const { db, migrate } = await import('../server/db'); await migrate(); await await db.exec('delete from webhook_updates; delete from delivery_events; delete from entitlements; delete from orders; delete from product_assets; delete from license_plans; delete from products; delete from users; delete from admin_users;');
+    await db.prepare('insert into products(id,slug,type,category,title,result,version,status) values(?,?,?,?,?,?,?,?)').run('p1','p1','template','ai','P1','R','1.0.0','published');
+    await db.prepare('insert into license_plans(id,product_id,name,price_xtr,projects,commercial,support_days,updates_days) values(?,?,?,?,?,?,?,?)').run('l1','p1','PRO',100,1,1,30,90);
   });
-  afterEach(async () => { const { db } = await import('../server/db'); db.exec('delete from webhook_updates; delete from delivery_events; delete from entitlements; delete from orders; delete from product_assets; delete from license_plans; delete from products; delete from users; delete from admin_users;'); });
+  afterEach(async () => { const { db } = await import('../server/db'); await db.exec('delete from webhook_updates; delete from delivery_events; delete from entitlements; delete from orders; delete from product_assets; delete from license_plans; delete from products; delete from users; delete from admin_users;'); });
   it('auth dev-login, order snapshot, payment idempotency and protected download', async () => {
     const { createApp } = await import('../server/app'); const app = createApp();
     const auth = await request(app).post('/api/auth/telegram').send({ devTelegramId: 7 }).expect(200); const token = auth.body.token;
@@ -57,11 +57,11 @@ describe('api hardening smoke', () => {
     const id = order.body.order.id;
     await request(app).post('/api/webhooks/telegram').send({ update_id: 1, pre_checkout_query: { id: 'pc1', invoice_payload: 'bad', currency: 'XTR', total_amount: 100 } }).expect(403);
     await request(app).post('/api/webhooks/telegram').set('x-telegram-bot-api-secret-token','test-secret-token-123').send({ update_id: 2, pre_checkout_query: { id: 'pc2', invoice_payload: `order_${id}_nope`, currency: 'USD', total_amount: 100 } }).expect(200);
-    const row = (await import('../server/db')).db.prepare('select payload from orders where id=?').get(id) as any;
+    const row = await (await import('../server/db')).db.prepare('select payload from orders where id=?').get(id) as any;
     await request(app).post('/api/webhooks/telegram').set('x-telegram-bot-api-secret-token','test-secret-token-123').send({ update_id: 3, message: { successful_payment: { invoice_payload: row.payload, currency: 'XTR', total_amount: 100, telegram_payment_charge_id: 'ch1' } } }).expect(200);
     await request(app).post('/api/webhooks/telegram').set('x-telegram-bot-api-secret-token','test-secret-token-123').send({ update_id: 3, message: { successful_payment: { invoice_payload: row.payload, currency: 'XTR', total_amount: 100, telegram_payment_charge_id: 'ch1' } } }).expect(200);
-    const db = (await import('../server/db')).db; expect((db.prepare('select count(*) n from entitlements').get() as any).n).toBe(1);
-    const ent = db.prepare('select id from entitlements').get() as any;
+    const db = (await import('../server/db')).db; expect(((await db.prepare('select count(*) n from entitlements').get()) as any).n).toBe(1);
+    const ent = await db.prepare('select id from entitlements').get() as any;
     await request(app).post('/api/purchases/not-mine/download').set('Authorization', `Bearer ${token}`).expect(404);
     await request(app).post(`/api/purchases/${ent.id}/download`).set('Authorization', `Bearer ${token}`).expect(200);
   });
