@@ -1,0 +1,10 @@
+export type ProductType = 'template' | 'ready_bot' | 'module' | 'service';
+export type Product = { id:string; slug:string; type:ProductType; category:string; title:string; result:string; description:string|null; stack:string|null; demo_url:string|null; preview?:string|null; version:string; changelog:string|null; price_from:number|null; created_at?:string; updated_at?:string };
+export type LicensePlan = { id:string; product_id:string; name:string; price_xtr:number; projects:number; commercial:0|1; support_days:number; updates_days:number; terms:string|null };
+export type ProductDetail = { product:Product; plans:LicensePlan[] };
+export type Purchase = { id:string; product_id:string; license_id:string; order_id:string; active:0|1; created_at:string; title:string; version:string; license_name:string };
+export type User = { id:number; name:string|null };
+export type AuthResponse = { token:string; expiresIn:number; user:User };
+export type Order = { id:string; product_id:string; license_id:string; amount_xtr:number; currency:'XTR'; status:'pending' };
+export type ApiErrorPayload = { error?: { code?:string; message?:string; requestId?:string } | string };
+export type ProductFilters = { q?:string; type?:ProductType; category?:string; sort?:'popular'|'new'|'price'; limit?:number; offset?:number };

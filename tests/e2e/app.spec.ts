@@ -1,14 +1,14 @@
-import { test, expect } from '@playwright/test';
+import {test,expect,type Page} from '@playwright/test';
 
-test('catalog smoke mobile viewport without console errors', async ({ page }) => {
-  const errors: string[] = [];
-  page.on('console', (msg) => { if (msg.type() === 'error') errors.push(msg.text()); });
-  await page.route('https://telegram.org/js/telegram-web-app.js', (route) => route.fulfill({ contentType: 'application/javascript', body: '' }));
-  await page.addInitScript(() => { (window as any).Telegram = { WebApp: { ready(){}, expand(){}, initData: 'development-test-init-data', initDataUnsafe: {}, BackButton: { show(){}, hide(){}, onClick(){}, offClick(){} }, openInvoice(){} } }; });
-  await page.goto('/');
-  await expect(page.getByText('Запускайте Telegram-автоматизацию')).toBeVisible();
-  await expect(page.locator('body')).toBeVisible();
-  const width = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
-  expect(width).toBeTruthy();
-  expect(errors).toEqual([]);
-});
+async function installTelegramMock(page:Page){
+  await page.route('https://telegram.org/js/telegram-web-app.js',route=>route.fulfill({contentType:'application/javascript',body:''}));
+  await page.addInitScript(()=>{(window as any).Telegram={WebApp:{ready(){},expand(){},enableClosingConfirmation(){},initData:'development-test-init-data',initDataUnsafe:{user:{id:777,first_name:'Premium',username:'cloud_user'}},colorScheme:'dark',viewportStableHeight:844,BackButton:{show(){},hide(){},onClick(){},offClick(){}},MainButton:{setParams(){},showProgress(){},hideProgress(){},onClick(){},offClick(){},hide(){}},SecondaryButton:{setParams(){},onClick(){},offClick(){},hide(){}},HapticFeedback:{impactOccurred(){},selectionChanged(){},notificationOccurred(){}},CloudStorage:{getItem(_k:string,cb:Function){cb(null,'')},setItem(_k:string,_v:string,cb:Function){cb(null,true)}},openInvoice(_url:string,cb:Function){cb('cancelled')}}};});
+}
+
+test.beforeEach(async({page})=>{await installTelegramMock(page)});
+
+test('premium dashboard is responsive and error free',async({page})=>{const errors:string[]=[];page.on('console',msg=>{if(msg.type()==='error')errors.push(msg.text())});await page.goto('/');await expect(page.getByText('Инструменты, которые')).toBeVisible();await expect(page.getByRole('navigation',{name:'Основная навигация'})).toBeVisible();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBeTruthy();expect(errors).toEqual([]);const unnamed=await page.locator('button').evaluateAll(buttons=>buttons.filter(button=>!(button.getAttribute('aria-label')||button.textContent?.trim())).length);expect(unnamed).toBe(0)});
+
+test('primary navigation and local product pages render',async({page})=>{await page.goto('/');await page.getByRole('link',{name:/Поиск/}).click();await expect(page.getByRole('heading',{name:'Найдите готовое решение'})).toBeVisible();await page.getByRole('link',{name:/Premium/}).click();await expect(page.getByRole('heading',{name:/Больше скорости/})).toBeVisible();await page.getByRole('link',{name:/Профиль/}).click();await expect(page.getByText('Telegram verified')).toBeVisible()});
+
+test('all secondary routes render without runtime failures',async({page})=>{const routes:[string,string][]=[['/settings','Настройки'],['/notifications','Уведомления'],['/referral','Делитесь инструментами'],['/statistics','Статистика'],['/history','История'],['/achievements','Достижения'],['/leaderboard','Личный рейтинг'],['/payments','Платежи'],['/subscription','Подписка и доступ'],['/support','Мы рядом'],['/faq','Частые вопросы'],['/about','Cloud Bot'],['/terms','Условия использования'],['/privacy','Конфиденциальность'],['/favorites','Избранное']];for(const[route,title]of routes){await page.goto(route);await expect(page.getByRole('heading',{name:title,exact:true}).first()).toBeVisible({timeout:10_000})}});
