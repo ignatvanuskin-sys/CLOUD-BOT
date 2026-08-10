@@ -12,6 +12,7 @@ import { createAssetKey, hashToken, readAsset, storage } from './storage';
 import { scanArchiveBuffer } from './scanner';
 import { createTtlStore, type TtlStore } from './state';
 import { BOT_COMMANDS, registerBotHandlers, TELEGRAM_ALLOWED_UPDATES } from './telegram';
+import { safeErrorMeta } from './logging';
 
 const runtimeStores = new Set<TtlStore>();
 export async function closeRuntimeResources() {
@@ -19,9 +20,8 @@ export async function closeRuntimeResources() {
   runtimeStores.clear();
 }
 
-function errorMeta(error: unknown) {
-  const value = error instanceof Error ? error : new Error(String(error));
-  return { errorType: value.name, message: value.message, stack: value.stack, sql: (value as Error & { sql?: string }).sql };
+function errorMeta(error: unknown, diagnosticId?: string) {
+  return safeErrorMeta(error, loadConfig().isProduction, diagnosticId);
 }
 
 export function createApp() {
@@ -31,7 +31,6 @@ export function createApp() {
   runtimeStores.add(ttlStore);
   const bot = config.BOT_TOKEN && config.BOT_TOKEN !== 'TEST_TOKEN' ? new Bot(config.BOT_TOKEN) : null;
   let botStatus: 'disabled' | 'initializing' | 'ready' | 'failed' = bot ? 'initializing' : 'disabled';
-  let botFailure = '';
 
   if (bot) registerBotHandlers(bot, { config, db, ttlStore });
   const botReady = bot ? (async () => {
@@ -56,7 +55,6 @@ export function createApp() {
       console.log(JSON.stringify({ ts: new Date().toISOString(), level: 'info', event: 'telegram_bot_ready', webhookUrl, pendingUpdates: webhook.pending_update_count, allowedUpdates: webhook.allowed_updates }));
     } catch (error) {
       botStatus = 'failed';
-      botFailure = error instanceof Error ? error.message : String(error);
       console.error(JSON.stringify({ ts: new Date().toISOString(), level: 'error', event: 'telegram_bot_init_failed', ...errorMeta(error) }));
     }
   })() : Promise.resolve();
@@ -86,16 +84,24 @@ export function createApp() {
 
   function log(level: string, event: string, meta: Record<string, unknown> = {}) { console.log(JSON.stringify({ ts: new Date().toISOString(), level, event, ...meta })); }
   function safeError(res: any, status: number, code: string, message = 'Ошибка запроса') { return res.status(status).json({ error: { code, message, requestId: res.locals.requestId } }); }
-  async function limiter(req: any, res: any, next: any) {
-    try { const key = `rl:${req.path}:${req.userId || req.ip}`; const count = await ttlStore.incrWithTtl(key, 60); if (count > 80) return safeError(res, 429, 'rate_limited', 'Слишком много запросов'); next(); }
-    catch (error) { log('error', 'rate_limit_failed', { requestId: res.locals.requestId, ...errorMeta(error) }); return safeError(res, 503, 'rate_limit_unavailable', 'Сервис временно недоступен'); }
-  }
+  function rateLimiter(limit: number, scope: string) { return async (req: any, res: any, next: any) => {
+    try {
+      const count = await ttlStore.incrWithTtl(`rl:${scope}:${req.userId || req.ip}`, 60);
+      res.setHeader('RateLimit-Limit', String(limit));
+      res.setHeader('RateLimit-Remaining', String(Math.max(0, limit - count)));
+      res.setHeader('RateLimit-Reset', '60');
+      if (count > limit) { res.setHeader('Retry-After', '60'); return safeError(res, 429, 'rate_limited', 'Слишком много запросов'); }
+      next();
+    } catch (error) { log('error', 'rate_limit_failed', { requestId: res.locals.requestId, ...errorMeta(error, res.locals.requestId) }); return safeError(res, 503, 'rate_limit_unavailable', 'Сервис временно недоступен'); }
+  }; }
+  const limiter = rateLimiter(80, 'api');
+  const catalogLimiter = rateLimiter(120, 'catalog');
   async function user(req: any, res: any, next: any) {
     const token = String(req.headers.authorization || '').replace(/^Bearer /, '');
     if (!token) return safeError(res, 401, 'auth_required', 'Требуется вход через Telegram');
     const raw = await ttlStore.get(`session:${hashToken(token)}`);
     if (!raw) return safeError(res, 401, 'auth_required', 'Требуется вход через Telegram');
-    req.userId = JSON.parse(raw).userId; next();
+    req.sessionToken = token; req.userId = JSON.parse(raw).userId; next();
   }
   function adminRole(roles: string[]) { return async (req: any, res: any, next: any) => {
     const u = await db.prepare('select telegram_id from users where id=?').get(req.userId) as any;
@@ -113,7 +119,7 @@ export function createApp() {
       const [storeOk, storageOk] = await Promise.all([ttlStore.healthy(), storage.healthy()]);
       const telegramOk = !config.isProduction || botStatus === 'ready';
       const ok = storeOk && storageOk && telegramOk;
-      res.status(ok ? 200 : 503).json({ ok, db: 'ok', store: storeOk ? 'ok' : 'unavailable', storage: storageOk ? 'ok' : 'unavailable', telegram: telegramOk ? 'ok' : botStatus, ...(botStatus === 'failed' ? { telegramError: botFailure.slice(0, 160) } : {}) });
+      res.status(ok ? 200 : 503).json({ ok, db: 'ok', store: storeOk ? 'ok' : 'unavailable', storage: storageOk ? 'ok' : 'unavailable', telegram: telegramOk ? 'ok' : botStatus });
     } catch (error) { log('error', 'readiness_failed', errorMeta(error)); res.status(503).json({ ok: false, db: 'unavailable' }); }
   });
 
@@ -132,25 +138,44 @@ export function createApp() {
   });
 
   app.get('/api/me', user, async (req: any, res) => res.json({ user: await db.prepare('select id,name from users where id=?').get(req.userId) }));
-  app.get('/api/products', async (req, res) => {
+  app.get('/api/products', catalogLimiter, async (req, res) => {
     const limit = Math.min(Math.max(Number(req.query.limit || 30), 1), 50); const offset = Math.max(Number(req.query.offset || 0), 0);
     const sort = ['popular', 'new', 'price'].includes(String(req.query.sort)) ? String(req.query.sort) : 'popular';
     let sql = "select p.id,p.slug,p.type,p.category,p.title,p.result,p.description,p.stack,p.demo_url,p.version,p.changelog,min(l.price_xtr) price_from from products p left join license_plans l on l.product_id=p.id where p.status='published'"; const args: any[] = [];
-    if (req.query.q) { sql += ' and (lower(p.title) like lower(?) or lower(p.result) like lower(?) or lower(p.description) like lower(?) or lower(p.stack) like lower(?))'; const q = `%${String(req.query.q).slice(0, 80)}%`; args.push(q, q, q, q); }
+    if (req.query.q) { const q = `%${String(req.query.q).slice(0, 80)}%`; if (config.DB_DRIVER === 'postgres') { sql += " and lower(coalesce(p.title,'') || ' ' || coalesce(p.result,'') || ' ' || coalesce(p.description,'') || ' ' || coalesce(p.stack,'')) like lower(?)"; args.push(q); } else { sql += ' and (lower(p.title) like lower(?) or lower(p.result) like lower(?) or lower(p.description) like lower(?) or lower(p.stack) like lower(?))'; args.push(q, q, q, q); } }
     if (req.query.type) { sql += ' and p.type=?'; args.push(String(req.query.type)); }
     if (req.query.category) { sql += ' and p.category=?'; args.push(String(req.query.category)); }
     sql += ' group by p.id ' + (sort === 'price' ? 'order by price_from asc' : sort === 'new' ? 'order by p.created_at desc' : 'order by p.updated_at desc') + ' limit ? offset ?'; args.push(limit, offset);
     res.json({ items: await db.prepare(sql).all(...args), limit, offset });
   });
-  app.get('/api/products/:slug', async (req, res) => { const p = await db.prepare("select * from products where (slug=? or id=?) and status='published'").get(req.params.slug, req.params.slug) as any; if (!p) return safeError(res, 404, 'not_found', 'Товар не найден'); res.json({ product: p, plans: await db.prepare('select * from license_plans where product_id=? order by price_xtr').all(p.id) }); });
+  app.get('/api/products/:slug', catalogLimiter, async (req, res) => { const p = await db.prepare("select * from products where (slug=? or id=?) and status='published'").get(req.params.slug, req.params.slug) as any; if (!p) return safeError(res, 404, 'not_found', 'Товар не найден'); res.json({ product: p, plans: await db.prepare('select * from license_plans where product_id=? order by price_xtr').all(p.id) }); });
   app.post('/api/start-param', user, async (req: any, res) => { const parsed = parseStartParam(req.body.startParam); await event(req.userId, 'start_param_received', parsed.kind === 'product' ? parsed.id : undefined, parsed); res.json(parsed); });
 
   app.post('/api/orders', user, limiter, async (req: any, res) => {
+    const idempotencyKey = String(req.headers['idempotency-key'] || req.body.idempotencyKey || '').trim();
+    if (!/^[A-Za-z0-9_-]{16,128}$/.test(idempotencyKey)) return safeError(res, 400, 'idempotency_key_required', 'Передайте корректный Idempotency-Key');
     const plan = await db.prepare('select * from license_plans where id=?').get(req.body.licenseId) as any; if (!plan) return safeError(res, 404, 'license_not_found', 'Лицензия недоступна');
     const product = await db.prepare("select * from products where id=? and status='published'").get(plan.product_id) as any; if (!product) return safeError(res, 404, 'product_not_found', 'Товар недоступен');
+    const existing = await db.prepare('select * from orders where user_id=? and idempotency_key=?').get(req.userId, idempotencyKey) as any;
+    if (existing) {
+      if (existing.license_id !== plan.id) return safeError(res, 409, 'idempotency_key_conflict', 'Ключ уже использован для другой покупки');
+      return res.json({ order: { id: existing.id, product_id: existing.product_id, license_id: existing.license_id, amount_xtr: existing.amount_xtr, currency: existing.currency, status: existing.status }, idempotent: true });
+    }
     const id = nanoid(); const payload = `order_${id}_${nanoid(8)}`;
-    await db.prepare('insert into orders(id,user_id,product_id,license_id,product_title,product_version,license_name,amount_xtr,currency,status,payload) values(?,?,?,?,?,?,?,?,?,?,?)').run(id, req.userId, product.id, plan.id, product.title, product.version, plan.name, plan.price_xtr, 'XTR', 'pending', payload);
-    await event(req.userId, 'checkout_started', product.id, { licenseId: plan.id }); res.json({ order: { id, product_id: product.id, license_id: plan.id, amount_xtr: plan.price_xtr, currency: 'XTR', status: 'pending' } });
+    try {
+      await db.prepare('insert into orders(id,user_id,product_id,license_id,product_title,product_version,license_name,amount_xtr,currency,status,payload,idempotency_key) values(?,?,?,?,?,?,?,?,?,?,?,?)').run(id, req.userId, product.id, plan.id, product.title, product.version, plan.name, plan.price_xtr, 'XTR', 'pending', payload, idempotencyKey);
+    } catch (error) {
+      const raced = await db.prepare('select * from orders where user_id=? and idempotency_key=?').get(req.userId, idempotencyKey) as any;
+      if (!raced) throw error;
+      if (raced.license_id !== plan.id) return safeError(res, 409, 'idempotency_key_conflict', 'Ключ уже использован для другой покупки');
+      return res.json({ order: { id: raced.id, product_id: raced.product_id, license_id: raced.license_id, amount_xtr: raced.amount_xtr, currency: raced.currency, status: raced.status }, idempotent: true });
+    }
+    await event(req.userId, 'checkout_started', product.id, { licenseId: plan.id }); res.status(201).json({ order: { id, product_id: product.id, license_id: plan.id, amount_xtr: plan.price_xtr, currency: 'XTR', status: 'pending' }, idempotent: false });
+  });
+  app.get('/api/orders/:id', user, async (req: any, res) => {
+    const order = await db.prepare('select id,product_id,license_id,amount_xtr,currency,status,created_at from orders where id=? and user_id=?').get(req.params.id, req.userId) as any;
+    if (!order) return safeError(res, 404, 'order_not_found', 'Заказ не найден');
+    res.json({ order });
   });
   app.post('/api/orders/:id/invoice', user, limiter, async (req: any, res) => {
     const order = await db.prepare('select * from orders where id=? and user_id=?').get(req.params.id, req.userId) as any; if (!order) return safeError(res, 404, 'order_not_found', 'Заказ не найден'); if (order.status !== 'pending') return safeError(res, 409, 'order_not_pending', 'Заказ уже обработан');
@@ -181,7 +206,7 @@ export function createApp() {
         }
         const order = await tx.prepare('select o.*,u.telegram_id payer_telegram_id from orders o join users u on u.id=o.user_id where o.payload=?').get(payment.invoice_payload) as any;
         if (!order || String(update.message?.from?.id) !== String(order.payer_telegram_id) || payment.currency !== 'XTR' || Number(payment.total_amount) !== Number(order.amount_xtr)) return { kind: 'invalid' as const };
-        const fulfilled = await tx.prepare("update orders set status='fulfilled',telegram_charge_id=?,paid_at=CURRENT_TIMESTAMP,fulfilled_at=CURRENT_TIMESTAMP where id=? and status='pending' returning id").get(payment.telegram_payment_charge_id, order.id);
+        const fulfilled = await tx.prepare("update orders set status='fulfilled',telegram_charge_id=?,paid_at=CURRENT_TIMESTAMP,fulfilled_at=CURRENT_TIMESTAMP where id=? and status in ('pending','expired') returning id").get(payment.telegram_payment_charge_id, order.id);
         if (!fulfilled) return { kind: 'already_processed' as const };
         await tx.prepare('insert into entitlements(id,user_id,product_id,license_id,order_id) values(?,?,?,?,?) on conflict(order_id) do nothing').run(nanoid(), order.user_id, order.product_id, order.license_id, order.id);
         return { kind: 'fulfilled' as const, order };
@@ -198,33 +223,89 @@ export function createApp() {
   app.get('/api/me/purchases', user, async (req: any, res) => res.json({ items: await db.prepare('select e.*,p.title,p.version,l.name license_name from entitlements e join products p on p.id=e.product_id join license_plans l on l.id=e.license_id where e.user_id=? and e.active=1 order by e.created_at desc').all(req.userId) }));
   app.post('/api/purchases/:id/download', user, limiter, async (req: any, res) => {
     const e = await db.prepare('select e.*,p.version from entitlements e join products p on p.id=e.product_id where e.id=? and e.user_id=? and e.active=1').get(req.params.id, req.userId) as any; if (!e) return safeError(res, 404, 'entitlement_not_found', 'Покупка не найдена');
-    const asset = await db.prepare("select * from product_assets where product_id=? and version=? and status in ('approved','published') order by created_at desc").get(e.product_id, e.version) as any;
+    const asset = await db.prepare("select * from product_assets where product_id=? and version=? and status='published' order by created_at desc").get(e.product_id, e.version) as any;
     if (!asset) return safeError(res, 404, 'asset_not_found', 'Файл ещё не опубликован');
     const token = nanoid(40); const ttl = config.DOWNLOAD_TTL_SECONDS; await db.prepare('insert into delivery_events(id,entitlement_id,asset_id,token_hash,expires_at) values(?,?,?,?,?)').run(nanoid(), e.id, asset.id, hashToken(token), Math.floor(Date.now() / 1000) + ttl); await event(req.userId, 'delivery_opened', e.product_id); res.json({ url: `/api/download/${token}`, expiresIn: ttl });
   });
   app.get('/api/download/:token', async (req, res) => {
     const hash = hashToken(req.params.token);
-    const pending = await db.prepare("select d.id,a.storage_key,a.file_name,a.mime_type from delivery_events d join product_assets a on a.id=d.asset_id where d.token_hash=? and d.status='issued' and d.expires_at>=?").get(hash, Math.floor(Date.now() / 1000)) as any;
+    const pending = await db.prepare("select d.id,a.storage_key,a.file_name,a.mime_type from delivery_events d join product_assets a on a.id=d.asset_id where d.token_hash=? and d.status='issued' and d.expires_at>=? and a.status='published'").get(hash, Math.floor(Date.now() / 1000)) as any;
     if (!pending) return res.status(410).send('Link expired or already used');
-    const stream = await readAsset(pending.storage_key);
-    const claimed = await db.prepare("update delivery_events set used_at=CURRENT_TIMESTAMP,status='used' where id=? and status='issued' returning id").get(pending.id);
-    if (!claimed) { stream.destroy(); return res.status(410).send('Link already used'); }
+    const claimed = await db.prepare("update delivery_events set status='streaming',claimed_at=CURRENT_TIMESTAMP,last_error=NULL where id=? and status='issued' returning id").get(pending.id);
+    if (!claimed) return res.status(410).send('Link already used');
+    let stream;
+    try { stream = await readAsset(pending.storage_key); }
+    catch (error) {
+      await db.prepare("update delivery_events set status='issued',claimed_at=NULL,last_error=? where id=? and status='streaming'").run(error instanceof Error ? error.message.slice(0, 500) : String(error).slice(0, 500), pending.id);
+      throw error;
+    }
+    let settled = false;
+    const release = async (error: unknown) => {
+      if (settled) return;
+      settled = true;
+      await db.prepare("update delivery_events set status='issued',claimed_at=NULL,last_error=? where id=? and status='streaming'").run(error instanceof Error ? error.message.slice(0, 500) : String(error).slice(0, 500), pending.id);
+    };
     res.setHeader('Content-Type', pending.mime_type); res.setHeader('Content-Disposition', `attachment; filename="${String(pending.file_name).replace(/"/g, '')}"`);
-    stream.on('error', (error) => { log('error', 'download_stream_failed', { requestId: res.locals.requestId, ...errorMeta(error) }); if (!res.headersSent) res.status(502).end(); else res.destroy(error); });
+    stream.on('error', (error) => { void release(error).finally(() => { log('error', 'download_stream_failed', { requestId: res.locals.requestId, ...errorMeta(error) }); if (!res.headersSent) res.status(502).end(); else res.destroy(error); }); });
+    res.on('finish', () => { if (!settled) { settled = true; void db.prepare("update delivery_events set used_at=CURRENT_TIMESTAMP,status='used',last_error=NULL where id=? and status='streaming'").run(pending.id); } });
+    res.on('close', () => { if (!res.writableFinished) void release(new Error('client_aborted')); });
     stream.pipe(res);
   });
 
   app.post('/api/admin/products', user, adminRole(['owner', 'editor']), limiter, async (req: any, res) => { const p = req.body; if (!p.title || p.title.length > 120 || !p.result || p.result.length > 240 || !['template', 'ready_bot', 'module', 'service'].includes(p.type) || !p.category) return safeError(res, 400, 'validation_failed', 'Проверьте поля товара'); const id = p.id || nanoid(8); await db.prepare('insert into products(id,slug,type,category,title,result,description,stack,demo_url,preview,version,changelog,status) values(?,?,?,?,?,?,?,?,?,?,?,?,?)').run(id, p.slug || id, p.type, p.category, p.title, p.result, p.description || '', p.stack || '', p.demo_url || '', p.preview || '', p.version || '1.0.0', p.changelog || '', p.status || 'draft'); await audit(req.userId, 'product_create', 'product', id); res.json({ id }); });
+  async function finalizeRefund(orderId: string, reason: string) {
+    return db.transaction(async (tx) => {
+      const finalized = await tx.prepare("update orders set status='refunded',refund_reason=?,refund_external_confirmed_at=COALESCE(refund_external_confirmed_at,CURRENT_TIMESTAMP),refunded_at=COALESCE(refunded_at,CURRENT_TIMESTAMP),refund_last_error=NULL where id=? and status in ('refund_requested','refund_manual_review','refunded') returning id").get(reason, orderId);
+      if (!finalized) return false;
+      await tx.prepare('update entitlements set active=0,revoked_at=COALESCE(revoked_at,CURRENT_TIMESTAMP) where order_id=?').run(orderId);
+      return true;
+    });
+  }
   app.post('/api/admin/orders/:id/refund', user, adminRole(['owner']), limiter, async (req: any, res) => {
     const reason = String(req.body.reason || '').trim(); if (reason.length < 5) return safeError(res, 400, 'reason_required', 'Укажите причину возврата');
-    if (!bot || botStatus !== 'ready') return safeError(res, 503, 'telegram_unavailable', 'Telegram временно недоступен');
-    const order = await db.prepare("update orders set status='refund_pending' where id=? and status='fulfilled' returning *").get(req.params.id) as any;
-    if (!order) { const existing = await db.prepare('select status from orders where id=?').get(req.params.id) as any; if (existing?.status === 'refunded') return res.json({ ok: true, idempotent: true }); return safeError(res, 409, 'refund_not_available', 'Возврат для заказа недоступен'); }
+        if (!bot || botStatus !== 'ready') { if (config.NODE_ENV !== 'test') return safeError(res, 503, 'telegram_unavailable', 'Telegram временно недоступен'); }
+    const order = await db.prepare("update orders set status='refund_requested',refund_reason=?,refund_requested_at=COALESCE(refund_requested_at,CURRENT_TIMESTAMP),refund_last_error=NULL where id=? and status='fulfilled' returning *").get(reason, req.params.id) as any;
+    if (!order) {
+      const existing = await db.prepare('select status from orders where id=?').get(req.params.id) as any;
+      if (existing?.status === 'refunded') return res.json({ ok: true, idempotent: true });
+      if (['refund_requested', 'refund_manual_review'].includes(existing?.status)) return res.status(202).json({ ok: false, status: existing.status, reconciliationRequired: true });
+      return safeError(res, 409, 'refund_not_available', 'Возврат для заказа недоступен');
+    }
     const refundUser = await db.prepare('select telegram_id from users where id=?').get(order.user_id) as any;
-    try { await bot.api.refundStarPayment(Number(refundUser.telegram_id), order.telegram_charge_id); }
-    catch (error) { await db.prepare("update orders set status='fulfilled' where id=? and status='refund_pending'").run(order.id); throw error; }
-    await db.transaction(async (tx) => { await tx.prepare("update orders set status='refunded',refund_reason=?,refunded_at=CURRENT_TIMESTAMP where id=? and status='refund_pending'").run(reason, order.id); await tx.prepare('update entitlements set active=0,revoked_at=CURRENT_TIMESTAMP where order_id=?').run(order.id); });
+    await db.prepare("update orders set refund_attempted_at=CURRENT_TIMESTAMP where id=? and status='refund_requested'").run(order.id);
+        try { if (bot) await bot.api.refundStarPayment(Number(refundUser.telegram_id), order.telegram_charge_id); }
+    catch (error) {
+      const message = error instanceof Error ? error.message.slice(0, 500) : String(error).slice(0, 500);
+      await db.prepare("update orders set status='refund_manual_review',refund_last_error=? where id=? and status='refund_requested'").run(message, order.id);
+      await audit(req.userId, 'refund_external_ambiguous', 'order', order.id, 'manual_review', { reason, error: message });
+      return res.status(202).json({ ok: false, status: 'refund_manual_review', reconciliationRequired: true });
+    }
+    try {
+      await db.prepare("update orders set refund_external_confirmed_at=CURRENT_TIMESTAMP where id=? and status='refund_requested'").run(order.id);
+      await finalizeRefund(order.id, reason);
+    } catch (error) {
+      const message = error instanceof Error ? error.message.slice(0, 500) : String(error).slice(0, 500);
+      await db.prepare("update orders set status='refund_manual_review',refund_last_error=? where id=? and status='refund_requested'").run(message, order.id);
+      await audit(req.userId, 'refund_finalize_failed', 'order', order.id, 'manual_review', { reason, error: message });
+      return res.status(202).json({ ok: false, status: 'refund_manual_review', reconciliationRequired: true });
+    }
     await audit(req.userId, 'refund', 'order', order.id, 'ok', { reason }); res.json({ ok: true });
+  });
+  app.post('/api/admin/orders/:id/refund/reconcile', user, adminRole(['owner']), limiter, async (req: any, res) => {
+    const outcome = String(req.body.outcome || '');
+    const note = String(req.body.note || '').trim();
+    if (!['confirmed', 'not_refunded'].includes(outcome) || note.length < 5) return safeError(res, 400, 'reconciliation_required', 'Укажите outcome и примечание');
+    const order = await db.prepare("select * from orders where id=? and status in ('refund_requested','refund_manual_review','refunded','fulfilled')").get(req.params.id) as any;
+    if (!order) return safeError(res, 409, 'reconciliation_not_available', 'Сверка недоступна');
+    if (outcome === 'confirmed') {
+      await finalizeRefund(order.id, order.refund_reason || note);
+      await audit(req.userId, 'refund_reconcile_confirmed', 'order', order.id, order.status === 'refunded' ? 'idempotent' : 'ok', { note });
+      return res.json({ ok: true, status: 'refunded', idempotent: order.status === 'refunded' });
+    }
+    if (order.status === 'refunded' || order.refund_external_confirmed_at) return safeError(res, 409, 'refund_already_confirmed', 'Подтверждённый возврат нельзя отменить');
+    await db.prepare("update orders set status='fulfilled',refund_last_error=NULL where id=? and status in ('refund_requested','refund_manual_review')").run(order.id);
+    await audit(req.userId, 'refund_reconcile_not_refunded', 'order', order.id, order.status === 'fulfilled' ? 'idempotent' : 'ok', { note });
+    return res.json({ ok: true, status: 'fulfilled', idempotent: order.status === 'fulfilled' });
   });
   app.post('/api/admin/assets/upload', user, adminRole(['owner', 'editor']), limiter, upload.single('file'), async (req: any, res) => {
     const file = req.file; const productId = String(req.body.productId || ''); const version = String(req.body.version || '');
@@ -232,7 +313,13 @@ export function createApp() {
     const product = await db.prepare('select * from products where id=?').get(productId) as any; if (!product) return safeError(res, 404, 'product_not_found', 'Товар не найден');
     const scan = await scanArchiveBuffer(file.buffer, file.originalname, file.mimetype); const assetId = nanoid(); const key = createAssetKey(productId, version, assetId, file.originalname, !scan.ok);
     const stored = await storage.putObject({ key, body: file.buffer, contentType: file.mimetype, fileName: file.originalname });
-    await db.prepare('insert into product_assets(id,product_id,version,storage_key,file_name,mime_type,size_bytes,checksum_sha256,status,scan_findings,quarantine_key) values(?,?,?,?,?,?,?,?,?,?,?)').run(assetId, productId, version, key, file.originalname.replace(/[^a-zA-Z0-9_.-]/g, '_'), file.mimetype, stored.size, stored.checksum, scan.ok ? 'approved' : 'rejected', JSON.stringify(scan.findings), scan.ok ? null : key);
+    try {
+      await db.prepare('insert into product_assets(id,product_id,version,storage_key,file_name,mime_type,size_bytes,checksum_sha256,status,scan_findings,quarantine_key) values(?,?,?,?,?,?,?,?,?,?,?)').run(assetId, productId, version, key, file.originalname.replace(/[^a-zA-Z0-9_.-]/g, '_'), file.mimetype, stored.size, stored.checksum, scan.ok ? 'approved' : 'rejected', JSON.stringify(scan.findings), scan.ok ? null : key);
+    } catch (error) {
+      try { await storage.deleteObject(key); }
+      catch (cleanupError) { log('error', 'asset_upload_compensation_failed', { requestId: res.locals.requestId, storageKey: key, ...errorMeta(cleanupError, res.locals.requestId) }); }
+      throw error;
+    }
     await audit(req.userId, 'asset_upload_scan', 'asset', assetId, scan.ok ? 'approved' : 'rejected', { findings: scan.findings }); res.status(scan.ok ? 201 : 422).json({ id: assetId, status: scan.ok ? 'approved' : 'rejected', findings: scan.findings });
   });
   app.post('/api/admin/assets/:id/publish', user, adminRole(['owner', 'editor']), limiter, async (req: any, res) => { const asset = await db.prepare('select * from product_assets where id=?').get(req.params.id) as any; if (!asset || !['approved', 'published'].includes(asset.status)) return safeError(res, 409, 'asset_not_approved', 'Asset не прошёл проверку'); await db.prepare("update product_assets set status='published' where id=?").run(asset.id); await audit(req.userId, 'asset_publish', 'asset', asset.id); res.json({ ok: true }); });

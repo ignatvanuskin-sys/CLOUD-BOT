@@ -3,6 +3,7 @@ import { nanoid } from 'nanoid';
 import type { AppConfig } from './config';
 import type { DbClient } from './pg-db';
 import type { TtlStore } from './state';
+import { safeErrorMeta } from './logging';
 
 export const BOT_COMMANDS = [
   { command: 'start', description: 'Открыть магазин' },
@@ -16,24 +17,14 @@ export const BOT_COMMANDS = [
 
 export const TELEGRAM_ALLOWED_UPDATES = ['message', 'edited_message', 'callback_query', 'inline_query', 'pre_checkout_query'] as const;
 
-function errorDetails(error: unknown) {
-  const value = error instanceof Error ? error : new Error(String(error));
-  return {
-    errorType: value.name,
-    message: value.message,
-    stack: value.stack,
-    sql: (value as Error & { sql?: string }).sql,
-    cause: value.cause instanceof Error ? value.cause.message : value.cause,
-  };
+function errorDetails(error: unknown, isProduction: boolean) {
+  return safeErrorMeta(error, isProduction);
 }
 
 function updateContext(ctx: Context) {
   return {
     updateId: ctx.update.update_id,
     updateType: Object.keys(ctx.update).find((key) => key !== 'update_id'),
-    userId: ctx.from?.id,
-    chatId: ctx.chat?.id,
-    message: ctx.message?.text?.slice(0, 500),
     command: ctx.message?.text?.match(/^\/([a-z0-9_]+)/i)?.[1]?.toLowerCase(),
   };
 }
@@ -48,10 +39,10 @@ export function registerBotHandlers(bot: Bot, deps: { config: AppConfig; db: DbC
   const { config, db, ttlStore } = deps;
 
   bot.catch(async (failure) => {
-    const details = { ts: new Date().toISOString(), level: 'error', event: 'telegram_handler_failed', ...updateContext(failure.ctx), ...errorDetails(failure.error) };
+    const details = { ts: new Date().toISOString(), level: 'error', event: 'telegram_handler_failed', ...updateContext(failure.ctx), ...errorDetails(failure.error, config.isProduction) };
     console.error(JSON.stringify(details));
     try { await failure.ctx.reply('Произошла внутренняя ошибка. Попробуйте ещё раз через минуту или используйте /support.'); } catch (replyError) {
-      console.error(JSON.stringify({ ts: new Date().toISOString(), level: 'error', event: 'telegram_error_reply_failed', ...updateContext(failure.ctx), ...errorDetails(replyError) }));
+      console.error(JSON.stringify({ ts: new Date().toISOString(), level: 'error', event: 'telegram_error_reply_failed', ...updateContext(failure.ctx), ...errorDetails(replyError, config.isProduction) }));
     }
   });
 

@@ -1,8 +1,9 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
+import { mkdir, stat, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { Readable } from 'node:stream';
-import { GetObjectCommand, HeadBucketCommand, HeadObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { DeleteObjectCommand, GetObjectCommand, HeadBucketCommand, HeadObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { loadConfig } from './config';
 
@@ -33,16 +34,24 @@ export function safeStoragePath(storageKey: string) {
 }
 function checksum(data: Buffer) { return crypto.createHash('sha256').update(data).digest('hex'); }
 function checksumBase64(data: Buffer) { return crypto.createHash('sha256').update(data).digest('base64'); }
+async function bodyToBuffer(body: PutObjectInput['body']): Promise<Buffer> {
+  if (Buffer.isBuffer(body)) return Buffer.from(body);
+  if (typeof body === 'string') return Buffer.from(body);
+  if (body instanceof Uint8Array) return Buffer.from(body.buffer, body.byteOffset, body.byteLength);
+  const chunks: Buffer[] = [];
+  for await (const chunk of body) chunks.push(Buffer.isBuffer(chunk) ? Buffer.from(chunk) : Buffer.from(chunk));
+  return Buffer.concat(chunks);
+}
 
 class LocalStorageAdapter implements StorageAdapter {
   private root: string;
   constructor() { const c = loadConfig(); this.root = path.resolve(c.STORAGE_LOCAL_ROOT); fs.mkdirSync(this.root, { recursive: true }); }
-  async putObject(input: PutObjectInput) { const file = safeStoragePath(input.key); fs.mkdirSync(path.dirname(file), { recursive: true }); const buffer = Buffer.isBuffer(input.body) ? input.body : Buffer.from(String(input.body)); fs.writeFileSync(file, buffer); return { key: input.key, size: buffer.length, checksum: checksum(buffer), contentType: input.contentType }; }
-  async getObject(key: string) { const file = safeStoragePath(key); if (!fs.existsSync(file)) throw new Error('storage_not_found'); return fs.createReadStream(file); }
-  async headObject(key: string) { const file = safeStoragePath(key); const stat = fs.statSync(file); return { size: stat.size }; }
+  async putObject(input: PutObjectInput) { const file = safeStoragePath(input.key); await mkdir(path.dirname(file), { recursive: true }); const buffer = await bodyToBuffer(input.body); await writeFile(file, buffer); return { key: input.key, size: buffer.length, checksum: checksum(buffer), contentType: input.contentType }; }
+  async getObject(key: string) { const file = safeStoragePath(key); try { await stat(file); } catch { throw new Error('storage_not_found'); } return fs.createReadStream(file); }
+  async headObject(key: string) { const file = safeStoragePath(key); const info = await stat(file); return { size: info.size }; }
   async createDownloadUrl(key: string) { return `/api/storage/local/${encodeURIComponent(key)}`; }
-  async deleteObject(key: string) { const file = safeStoragePath(key); if (fs.existsSync(file)) fs.unlinkSync(file); }
-  async healthy() { return fs.existsSync(this.root); }
+  async deleteObject(key: string) { const file = safeStoragePath(key); try { await unlink(file); } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; } }
+  async healthy() { try { return (await stat(this.root)).isDirectory(); } catch { return false; } }
 }
 
 class S3StorageAdapter implements StorageAdapter {
@@ -52,7 +61,7 @@ class S3StorageAdapter implements StorageAdapter {
   async getObject(key: string) { const c = loadConfig(); const out = await this.s3.send(new GetObjectCommand({ Bucket: c.S3_BUCKET, Key: key })); return out.Body as Readable; }
   async headObject(key: string) { const c = loadConfig(); const out = await this.s3.send(new HeadObjectCommand({ Bucket: c.S3_BUCKET, Key: key })); return { size: Number(out.ContentLength || 0), checksum: out.ChecksumSHA256, contentType: out.ContentType }; }
   async createDownloadUrl(key: string, ttlSeconds: number, fileName: string) { const c = loadConfig(); return getSignedUrl(this.s3, new GetObjectCommand({ Bucket: c.S3_BUCKET, Key: key, ResponseContentDisposition: `attachment; filename="${fileName.replace(/"/g, '')}"` }), { expiresIn: ttlSeconds }); }
-  async deleteObject(key: string) { void key; throw new Error('delete_requires_explicit_policy'); }
+  async deleteObject(key: string) { const c = loadConfig(); await this.s3.send(new DeleteObjectCommand({ Bucket: c.S3_BUCKET, Key: key })); }
   async healthy() { try { const c = loadConfig(); if (!c.S3_BUCKET) return false; await this.s3.send(new HeadBucketCommand({ Bucket: c.S3_BUCKET })); return true; } catch { return false; } }
 }
 

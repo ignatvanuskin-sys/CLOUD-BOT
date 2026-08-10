@@ -59,7 +59,9 @@ Download is issued only after entitlement check. Download tokens are stored as h
 
 ## DB migration
 
-PostgreSQL schema lives in `server/db/postgres-schema.sql`. Migration helper: `scripts/db.mjs`.
+PostgreSQL startup uses ordered immutable migrations in `server/db/postgres-migrations/`. The `schema_migrations` ledger stores a SHA-256 checksum; already-applied versions are skipped and changed migration content fails closed. `server/db/postgres-schema.sql` is reference-only and is never executed at runtime.
+
+Migration `003_catalog_trigram_search` attempts to enable `pg_trgm` and creates the partial GIN index when available. If the database role lacks extension privilege, migration emits a notice and startup continues with the existing bounded `LIKE` query; search remains correct but may be slower until an administrator enables `pg_trgm` and creates the index.
 
 For SQLite import and rollback, follow `docs/runbooks/db-migration.md`. Do not switch production DB until backup and restore are tested.
 

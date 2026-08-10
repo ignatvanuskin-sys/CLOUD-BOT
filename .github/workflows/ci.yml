@@ -28,10 +28,28 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run test:integration
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
       - run: npm run build
       - run: npm run security:scan
       - run: npm run deps:audit
-      - run: npm run db:migrate
+      - name: Create S3 contract bucket
+        run: |
+          node -e "const {S3Client,CreateBucketCommand}=require('@aws-sdk/client-s3');const s=new S3Client({region:'us-east-1',endpoint:'http://localhost:9000',forcePathStyle:true,credentials:{accessKeyId:'minioadmin',secretAccessKey:'minioadmin'}});s.send(new CreateBucketCommand({Bucket:'cloud-bot-contracts'})).catch(e=>{if(e.name!=='BucketAlreadyOwnedByYou'&&e.name!=='BucketAlreadyExists')throw e})"
+      - run: npm run test:adapters
         env:
+          RUN_PRODUCTION_ADAPTER_CONTRACTS: 'true'
+          NODE_ENV: test
+          DB_DRIVER: postgres
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/cloud_bot
           DATABASE_SSL: 'false'
+          REDIS_URL: redis://localhost:6379
+          REDIS_KEY_PREFIX: 'cloud-bot:ci:'
+          STORAGE_DRIVER: s3
+          S3_ENDPOINT: http://localhost:9000
+          S3_REGION: us-east-1
+          S3_BUCKET: cloud-bot-contracts
+          S3_ACCESS_KEY_ID: minioadmin
+          S3_SECRET_ACCESS_KEY: minioadmin
+          S3_FORCE_PATH_STYLE: 'true'
+      - run: git diff --check

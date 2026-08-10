@@ -5,6 +5,6 @@ export type ProductDetail = { product:Product; plans:LicensePlan[] };
 export type Purchase = { id:string; product_id:string; license_id:string; order_id:string; active:0|1; created_at:string; title:string; version:string; license_name:string };
 export type User = { id:number; name:string|null };
 export type AuthResponse = { token:string; expiresIn:number; user:User };
-export type Order = { id:string; product_id:string; license_id:string; amount_xtr:number; currency:'XTR'; status:'pending' };
+export type Order = { id:string; product_id:string; license_id:string; amount_xtr:number; currency:'XTR'; status:'pending'|'fulfilled' };
 export type ApiErrorPayload = { error?: { code?:string; message?:string; requestId?:string } | string };
 export type ProductFilters = { q?:string; type?:ProductType; category?:string; sort?:'popular'|'new'|'price'; limit?:number; offset?:number };

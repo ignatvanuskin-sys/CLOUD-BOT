@@ -1,5 +1,12 @@
 import fs from 'node:fs';
+import crypto from 'node:crypto';
 import { Client } from 'pg';
+
+const migrations = [
+  ['001_initial', '001_initial.sql'],
+  ['002_delivery_refund_state_machines', '002_delivery_refund_state_machines.sql'],
+  ['003_catalog_trigram_search', '003_catalog_trigram_search.sql'],
+];
 
 const cmd = process.argv[2];
 const url = process.env.DATABASE_URL;
@@ -10,9 +17,9 @@ if (!url) {
 
 function sslConfig() {
   if (process.env.DATABASE_SSL !== 'true') return undefined;
-  // Railway internal Postgres often uses a self-signed chain. Production external DBs
-  // should set DATABASE_SSL_REJECT_UNAUTHORIZED=true.
-  return { rejectUnauthorized: process.env.DATABASE_SSL_REJECT_UNAUTHORIZED === 'true' };
+  // Certificate validation is secure by default. Development environments using a
+  // self-signed chain may explicitly opt out with DATABASE_SSL_REJECT_UNAUTHORIZED=false.
+  return { rejectUnauthorized: process.env.DATABASE_SSL_REJECT_UNAUTHORIZED !== 'false' };
 }
 
 const client = new Client({ connectionString: url, ssl: sslConfig() });
@@ -36,21 +43,33 @@ async function status() {
 }
 
 async function migrate() {
-  await client.query('select pg_advisory_lock(42424242)');
   try {
-    const sql = fs.readFileSync('server/db/postgres-schema.sql', 'utf8');
     await client.query('begin');
-    await client.query(sql);
-    await client.query("insert into schema_migrations(version) values('001_initial') on conflict do nothing");
+    await client.query('select pg_advisory_xact_lock(42424242)');
+    await client.query('create table if not exists schema_migrations(version text primary key, checksum text, applied_at timestamptz not null default now())');
+    await client.query('alter table schema_migrations add column if not exists checksum text');
+    const appliedNow = [];
+    for (const [version, file] of migrations) {
+      const sql = fs.readFileSync(`server/db/postgres-migrations/${file}`, 'utf8');
+      const checksum = crypto.createHash('sha256').update(sql).digest('hex');
+      const applied = await client.query('select checksum from schema_migrations where version=$1', [version]);
+      if (applied.rowCount) {
+        const existing = applied.rows[0].checksum;
+        if (existing && existing !== checksum) throw new Error(`migration_checksum_mismatch:${version}`);
+        if (!existing) await client.query('update schema_migrations set checksum=$1 where version=$2 and checksum is null', [checksum, version]);
+        continue;
+      }
+      await client.query(sql);
+      await client.query('insert into schema_migrations(version,checksum) values($1,$2)', [version, checksum]);
+      appliedNow.push(version);
+    }
     await client.query('commit');
     const count = await client.query('select count(*)::int as n from schema_migrations');
-    console.log(JSON.stringify({ ok: true, migrated: '001_initial', migrationCount: count.rows[0].n }, null, 2));
+    console.log(JSON.stringify({ ok: true, applied: appliedNow, migrationCount: count.rows[0].n }, null, 2));
   } catch (error) {
     await client.query('rollback').catch(() => undefined);
     console.error('migration_failed', error instanceof Error ? error.message : String(error));
     process.exitCode = 1;
-  } finally {
-    await client.query('select pg_advisory_unlock(42424242)').catch(() => undefined);
   }
 }
 

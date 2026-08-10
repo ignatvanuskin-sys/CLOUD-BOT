@@ -30,27 +30,54 @@ export function validateMagicBytes(buffer: Buffer, fileName: string, mime: strin
 
 export async function scanArchiveBuffer(buffer: Buffer, fileName: string, mime: string, maxEntries = 2000): Promise<ScanResult> {
   const findings: string[] = [];
+  const lower = fileName.toLowerCase();
   const magic = validateMagicBytes(buffer, fileName, mime);
   findings.push(...magic.findings);
-  findings.push(...scanTextForSecrets(buffer.subarray(0, Math.min(buffer.length, 1024 * 1024)).toString('utf8')).findings);
-  if (!fileName.toLowerCase().endsWith('.zip')) return { ok: findings.length === 0, findings };
+  if (/\.(tar|gz|tar\.gz)$/i.test(lower) || mime.includes('gzip') || mime.includes('tar')) {
+    findings.push('archive_format_not_supported');
+    return { ok: false, findings: [...new Set(findings)] };
+  }
+  if (!lower.endsWith('.zip')) {
+    findings.push(...scanTextForSecrets(buffer.toString('utf8')).findings);
+    return { ok: findings.length === 0, findings: [...new Set(findings)] };
+  }
 
+  const maxUncompressedBytes = 200 * 1024 * 1024;
+  const maxEntryBytes = 50 * 1024 * 1024;
+  const maxCompressionRatio = 100;
   await new Promise<void>((resolve) => {
-    yauzl.fromBuffer(buffer, { lazyEntries: true }, (err, zip) => {
+    yauzl.fromBuffer(buffer, { lazyEntries: true, decodeStrings: true, validateEntrySizes: true }, (err, zip) => {
       if (err || !zip) { findings.push('bad_zip'); return resolve(); }
       let entries = 0;
-      zip.readEntry();
+      let totalUncompressed = 0;
+      let settled = false;
+      const finish = () => { if (!settled) { settled = true; zip.close(); resolve(); } };
+      const next = () => { if (!settled) zip.readEntry(); };
       zip.on('entry', (entry) => {
         entries += 1;
         const name = entry.fileName;
+        totalUncompressed += entry.uncompressedSize;
         if (entries > maxEntries) findings.push('too_many_entries');
+        if (entry.uncompressedSize > maxEntryBytes || totalUncompressed > maxUncompressedBytes) findings.push('uncompressed_size_limit');
+        if (entry.compressedSize === 0 ? entry.uncompressedSize > 0 : entry.uncompressedSize / entry.compressedSize > maxCompressionRatio) findings.push('compression_ratio_limit');
+        if ((entry.generalPurposeBitFlag & 0x1) !== 0) findings.push('encrypted_entry');
+        if (![0, 8].includes(entry.compressionMethod)) findings.push('unsupported_compression');
         if (name.startsWith('/') || name.includes('..') || /^[a-zA-Z]:/.test(name)) findings.push(`zip_slip:${name.slice(0, 80)}`);
         if ((entry.externalFileAttributes >>> 16 & 0o170000) === 0o120000) findings.push(`symlink:${name.slice(0, 80)}`);
         if (/\.env(\.|$)|id_rsa|private[_-]?key|cookies?\.json/i.test(name)) findings.push(`suspicious_file:${name.slice(0, 80)}`);
-        zip.readEntry();
+        if (/\/$/.test(name) || findings.includes('too_many_entries') || findings.includes('uncompressed_size_limit') || findings.includes('encrypted_entry') || findings.includes('unsupported_compression')) return next();
+        zip.openReadStream(entry, (streamError, stream) => {
+          if (streamError || !stream) { findings.push('zip_entry_read_error'); return next(); }
+          const chunks: Buffer[] = [];
+          let read = 0;
+          stream.on('data', (chunk: Buffer) => { read += chunk.length; if (read <= maxEntryBytes) chunks.push(chunk); });
+          stream.on('end', () => { findings.push(...scanTextForSecrets(Buffer.concat(chunks).toString('utf8')).findings); next(); });
+          stream.on('error', () => { findings.push('zip_entry_read_error'); next(); });
+        });
       });
-      zip.on('end', () => resolve());
-      zip.on('error', () => { findings.push('zip_read_error'); resolve(); });
+      zip.on('end', finish);
+      zip.on('error', () => { findings.push('zip_read_error'); finish(); });
+      next();
     });
   });
   return { ok: findings.length === 0, findings: [...new Set(findings)] };

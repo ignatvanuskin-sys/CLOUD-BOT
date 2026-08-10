@@ -1,5 +1,5 @@
 import { Bot } from 'grammy';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AppConfig } from '../server/config';
 import type { DbClient } from '../server/pg-db';
 import type { TtlStore } from '../server/state';
@@ -65,6 +65,7 @@ function setup() {
 }
 
 describe('Telegram command contract', () => {
+  afterEach(() => vi.restoreAllMocks());
   it('registers the complete production command and update contract', () => {
     expect(BOT_COMMANDS.map(({ command }) => command)).toEqual(['start', 'help', 'profile', 'settings', 'terms', 'support', 'paysupport']);
     expect(TELEGRAM_ALLOWED_UPDATES).toEqual(expect.arrayContaining(['message', 'callback_query', 'inline_query', 'pre_checkout_query']));
@@ -77,6 +78,16 @@ describe('Telegram command contract', () => {
       expect(calls.some(({ method }) => method === 'sendMessage')).toBe(true);
     });
   }
+
+  it('does not log message text or Telegram PII', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const { bot } = setup();
+    await bot.handleUpdate({ update_id: 49, message: { message_id: 49, date: Math.floor(Date.now() / 1000), chat: { id: 42, type: 'private', first_name: 'Private' }, from: { id: 42, is_bot: false, first_name: 'Private' }, text: 'sensitive message text' } });
+    const output = log.mock.calls.flat().join(' ');
+    expect(output).not.toContain('sensitive message text');
+    expect(output).not.toContain('"userId"');
+    expect(output).not.toContain('"chatId"');
+  });
 
   it('unknown commands receive a helpful response', async () => {
     const { bot, calls } = setup();

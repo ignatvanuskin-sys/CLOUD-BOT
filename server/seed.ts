@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { db, migrate } from './db';
+import { bootstrapAdmins, db, migrate } from './db';
 import { ensureDemoAsset } from './storage';
 
 if (process.env.NODE_ENV === 'production') throw new Error('Seed is disabled in production');
@@ -18,5 +18,5 @@ for (const [id, title, result, type, cat] of items) {
   const asset = await ensureDemoAsset(id, '1.0.0');
   await db.prepare('insert into product_assets(id,product_id,version,storage_key,file_name,mime_type,size_bytes,checksum_sha256,status) values(?,?,?,?,?,?,?,?,?) on conflict(id) do update set product_id=excluded.product_id,version=excluded.version,storage_key=excluded.storage_key,file_name=excluded.file_name,mime_type=excluded.mime_type,size_bytes=excluded.size_bytes,checksum_sha256=excluded.checksum_sha256,status=excluded.status').run(`${id}-asset-1`, id, '1.0.0', asset.key, 'demo-package.txt', 'text/plain', asset.size, asset.checksum, 'published');
 }
-for (const id of (process.env.ADMIN_TELEGRAM_IDS || '').split(',').filter(Boolean)) await db.prepare('insert into admin_users(telegram_id,role) values(?,?) on conflict(telegram_id) do nothing').run(id.trim(), 'owner');
+await bootstrapAdmins();
 console.log('seeded', items.length, 'products');

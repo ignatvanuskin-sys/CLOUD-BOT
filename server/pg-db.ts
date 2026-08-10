@@ -1,5 +1,6 @@
 import { Pool, type PoolClient, type QueryResult } from 'pg';
 import type { AppConfig } from './config';
+import { safeErrorMeta } from './logging';
 
 export type DbRunResult = { changes: number };
 export type DbStatement = {
@@ -93,13 +94,13 @@ export function createPgDb(config: AppConfig): DbClient {
   if (!config.DATABASE_URL) throw new Error('DATABASE_URL required');
   const pool = new Pool({
     connectionString: config.DATABASE_URL,
-    ssl: config.DATABASE_SSL === 'true' ? { rejectUnauthorized: config.DATABASE_SSL_REJECT_UNAUTHORIZED === 'true' } : false,
+    ssl: config.DATABASE_SSL === 'true' ? { rejectUnauthorized: config.DATABASE_SSL_REJECT_UNAUTHORIZED !== 'false' } : false,
     max: config.DATABASE_POOL_MAX,
     idleTimeoutMillis: 20_000,
     connectionTimeoutMillis: 10_000,
   });
   pool.on('error', (error) => {
-    console.error(JSON.stringify({ ts: new Date().toISOString(), level: 'error', event: 'postgres_pool_error', errorType: error.name, message: error.message, stack: error.stack }));
+    console.error(JSON.stringify({ ts: new Date().toISOString(), level: 'error', event: 'postgres_pool_error', ...safeErrorMeta(error, config.isProduction) }));
   });
   return clientFor(pool, () => pool.end());
 }

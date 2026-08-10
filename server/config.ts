@@ -33,7 +33,7 @@ const EnvSchema = z.object({
   REDIS_URL: z.string().optional(),
   REDIS_KEY_PREFIX: z.string().default('cloud-bot:local:'),
   REDIS_TLS: z.enum(['true', 'false']).default('false'),
-  DATABASE_SSL_REJECT_UNAUTHORIZED: z.enum(['true', 'false']).default('false'),
+  DATABASE_SSL_REJECT_UNAUTHORIZED: z.enum(['true', 'false']).optional(),
 });
 
 export type AppConfig = z.infer<typeof EnvSchema> & { isProduction: boolean; allowedOrigin?: string };
