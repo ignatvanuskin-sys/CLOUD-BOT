@@ -9,6 +9,7 @@ export const POSTGRES_MIGRATIONS = [
   { version: '001_initial', file: '001_initial.sql' },
   { version: '002_delivery_refund_state_machines', file: '002_delivery_refund_state_machines.sql' },
   { version: '003_catalog_trigram_search', file: '003_catalog_trigram_search.sql' },
+  { version: '004_catalog_sort_indexes', file: '004_catalog_sort_indexes.sql' },
 ] as const;
 
 export async function migrate() {
@@ -65,6 +66,11 @@ CREATE INDEX IF NOT EXISTS idx_assets_product_version ON product_assets(product_
   await addColumn('delivery_events', deliveryColumns, 'claimed_at', 'TEXT');
   await addColumn('delivery_events', deliveryColumns, 'last_error', 'TEXT');
   await db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_user_idempotency ON orders(user_id,idempotency_key) WHERE idempotency_key IS NOT NULL');
+  const productColumns = await db.prepare('pragma table_info(products)').all() as Array<{ name: string }>;
+  const planColumns = await db.prepare('pragma table_info(license_plans)').all() as Array<{ name: string }>;
+  if (productColumns.some((column) => column.name === 'status') && productColumns.some((column) => column.name === 'updated_at')) await db.exec('CREATE INDEX IF NOT EXISTS idx_products_status_updated ON products(status,updated_at DESC)');
+  if (productColumns.some((column) => column.name === 'status') && productColumns.some((column) => column.name === 'created_at')) await db.exec('CREATE INDEX IF NOT EXISTS idx_products_status_created ON products(status,created_at DESC)');
+  if (planColumns.some((column) => column.name === 'product_id') && planColumns.some((column) => column.name === 'price_xtr')) await db.exec('CREATE INDEX IF NOT EXISTS idx_license_plans_product_price ON license_plans(product_id,price_xtr)');
 }
 
 export async function bootstrapAdmins(rawIds = config.ADMIN_TELEGRAM_IDS) {

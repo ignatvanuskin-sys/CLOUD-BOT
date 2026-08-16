@@ -1,6 +1,7 @@
 import Redis from 'ioredis';
 import type { AppConfig } from './config';
 import { loadConfig } from './config';
+import { safeErrorMeta } from './logging';
 
 export interface TtlStore {
   get(key: string): Promise<string | null>;
@@ -23,9 +24,9 @@ class MemoryStore implements TtlStore {
 
 class RedisStore implements TtlStore {
   private redis: Redis;
-  constructor(private prefix: string, url: string, tls: boolean) {
+  constructor(private prefix: string, url: string, tls: boolean, private isProduction: boolean) {
     this.redis = new Redis(url, { lazyConnect: false, tls: tls ? {} : undefined, maxRetriesPerRequest: 2, connectTimeout: 3000 });
-    this.redis.on('error', (error) => console.error(JSON.stringify({ ts: new Date().toISOString(), level: 'error', event: 'redis_error', errorType: error.name, message: error.message })));
+    this.redis.on('error', (error) => console.error(JSON.stringify({ ts: new Date().toISOString(), level: 'error', event: 'redis_error', ...safeErrorMeta(error, this.isProduction) })));
   }
   private k(key: string) { return this.prefix + key; }
   async get(key: string) { return this.redis.get(this.k(key)); }
@@ -43,7 +44,7 @@ const globalStore = new WeakMap<AppConfig, TtlStore>();
 export function createTtlStore(config = loadConfig()): TtlStore {
   const cached = globalStore.get(config);
   if (cached) return cached;
-  const store = config.isProduction || config.REDIS_URL ? new RedisStore(config.REDIS_KEY_PREFIX, config.REDIS_URL || '', config.REDIS_TLS === 'true') : new MemoryStore();
+  const store = config.isProduction || config.REDIS_URL ? new RedisStore(config.REDIS_KEY_PREFIX, config.REDIS_URL || '', config.REDIS_TLS === 'true', config.isProduction) : new MemoryStore();
   globalStore.set(config, store);
   return store;
 }

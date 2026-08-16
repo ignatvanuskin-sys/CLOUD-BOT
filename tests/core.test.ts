@@ -5,6 +5,7 @@ import { parseStartParam, validateTelegramInitData } from '../server/schema';
 import { safeStoragePath, createAssetKey } from '../server/storage';
 import { scanArchiveBuffer, scanTextForSecrets, validateMagicBytes } from '../server/scanner';
 import { loadConfig } from '../server/config';
+import { vi } from 'vitest';
 
 function signed(botToken: string, user: any, authDate: number) {
   const p = new URLSearchParams({ user: JSON.stringify(user), auth_date: String(authDate), query_id: 'q' });
@@ -102,6 +103,13 @@ describe('api hardening smoke', () => {
     await request(app).post(`/api/purchases/${ent.id}/download`).set('Authorization', `Bearer ${token}`).expect(404);
     await db.prepare("update product_assets set status='published' where id='a1'").run();
     await request(app).post(`/api/purchases/${ent.id}/download`).set('Authorization', `Bearer ${token}`).expect(200);
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const capability = 'sensitive-capability-token-for-test';
+    await request(app).get(`/api/download/${capability}`).expect(410);
+    const output = log.mock.calls.flat().join(' ');
+    log.mockRestore();
+    expect(output).not.toContain(capability);
+    expect(output).toContain('/api/download/[redacted]');
   });
   it('bootstraps configured admins idempotently', async () => { const { bootstrapAdmins, db } = await import('../server/db'); await bootstrapAdmins('123, 123,invalid,456'); await bootstrapAdmins('123,456'); expect(((await db.prepare('select count(*) n from admin_users').get()) as any).n).toBe(2); });
   it('health endpoints do not expose secrets', async () => { const { createApp } = await import('../server/app'); const res = await request(createApp()).get('/health/ready').expect(200); expect(JSON.stringify(res.body)).not.toContain('test-secret'); expect(res.body).not.toHaveProperty('telegramError'); });

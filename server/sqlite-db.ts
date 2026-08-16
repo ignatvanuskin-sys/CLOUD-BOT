@@ -1,4 +1,4 @@
-import Database from 'better-sqlite3';
+import { createRequire } from 'node:module';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { AppConfig } from './config';
@@ -16,6 +16,8 @@ class Mutex {
 }
 
 export function createSqliteDb(config: AppConfig): DbClient {
+  const require = createRequire(import.meta.url);
+  const Database = require('better-sqlite3') as typeof import('better-sqlite3');
   const dbPath = config.DATABASE_PATH;
   fs.mkdirSync(path.dirname(dbPath), { recursive: true });
   const db = new Database(dbPath);

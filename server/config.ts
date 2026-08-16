@@ -3,6 +3,7 @@ import { z } from 'zod';
 const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(8787),
+  TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(10).default(1),
   BOT_TOKEN: z.union([z.string().regex(/^\d+:[A-Za-z0-9_-]{20,}$/), z.literal('TEST_TOKEN')]).optional(),
   BOT_USERNAME: z.string().regex(/^[A-Za-z0-9_]{5,32}$/).optional(),
   WEBAPP_URL: z.string().url().optional(),

@@ -59,8 +59,8 @@ export function createApp() {
     }
   })() : Promise.resolve();
 
-  const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: config.MAX_UPLOAD_BYTES, files: 1 } });
-  app.set('trust proxy', 1);
+  const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: config.MAX_UPLOAD_BYTES, files: 1, fields: 8, parts: 10, fieldSize: 16 * 1024 } });
+  app.set('trust proxy', config.TRUST_PROXY_HOPS);
   app.use((req, res, next) => { res.locals.requestId = nanoid(10); res.setHeader('x-request-id', res.locals.requestId); next(); });
   app.use(helmet({ contentSecurityPolicy: { directives: { scriptSrc: ["'self'", 'https://telegram.org'], connectSrc: ["'self'", 'https://telegram.org'] } } }));
   app.use(cors({ origin: (origin, cb) => (!origin || !config.isProduction || origin === config.allowedOrigin ? cb(null, true) : cb(new Error('cors_denied'))), credentials: false }));
@@ -72,10 +72,11 @@ export function createApp() {
   app.use((req, res, next) => {
     const startedAt = Date.now();
     let logged = false;
+    const safeLogPath = req.path.startsWith('/api/download/') ? '/api/download/[redacted]' : req.path;
     const writeLog = (event: string) => {
       if (logged) return;
       logged = true;
-      console.log(JSON.stringify({ ts: new Date().toISOString(), level: 'info', event, method: req.method, path: req.path, status: res.statusCode, durationMs: Date.now() - startedAt, requestId: res.locals.requestId }));
+      console.log(JSON.stringify({ ts: new Date().toISOString(), level: 'info', event, method: req.method, path: safeLogPath, status: res.statusCode, durationMs: Date.now() - startedAt, requestId: res.locals.requestId }));
     };
     res.on('finish', () => writeLog('http_request_end'));
     res.on('close', () => writeLog('http_request_aborted'));
@@ -141,11 +142,11 @@ export function createApp() {
   app.get('/api/products', catalogLimiter, async (req, res) => {
     const limit = Math.min(Math.max(Number(req.query.limit || 30), 1), 50); const offset = Math.max(Number(req.query.offset || 0), 0);
     const sort = ['popular', 'new', 'price'].includes(String(req.query.sort)) ? String(req.query.sort) : 'popular';
-    let sql = "select p.id,p.slug,p.type,p.category,p.title,p.result,p.description,p.stack,p.demo_url,p.version,p.changelog,min(l.price_xtr) price_from from products p left join license_plans l on l.product_id=p.id where p.status='published'"; const args: any[] = [];
+    let sql = "select p.id,p.slug,p.type,p.category,p.title,p.result,p.description,p.stack,p.demo_url,p.version,p.changelog,l.price_from from products p left join (select product_id,min(price_xtr) price_from from license_plans group by product_id) l on l.product_id=p.id where p.status='published'"; const args: any[] = [];
     if (req.query.q) { const q = `%${String(req.query.q).slice(0, 80)}%`; if (config.DB_DRIVER === 'postgres') { sql += " and lower(coalesce(p.title,'') || ' ' || coalesce(p.result,'') || ' ' || coalesce(p.description,'') || ' ' || coalesce(p.stack,'')) like lower(?)"; args.push(q); } else { sql += ' and (lower(p.title) like lower(?) or lower(p.result) like lower(?) or lower(p.description) like lower(?) or lower(p.stack) like lower(?))'; args.push(q, q, q, q); } }
     if (req.query.type) { sql += ' and p.type=?'; args.push(String(req.query.type)); }
     if (req.query.category) { sql += ' and p.category=?'; args.push(String(req.query.category)); }
-    sql += ' group by p.id ' + (sort === 'price' ? 'order by price_from asc' : sort === 'new' ? 'order by p.created_at desc' : 'order by p.updated_at desc') + ' limit ? offset ?'; args.push(limit, offset);
+    sql += ' ' + (sort === 'price' ? 'order by l.price_from asc nulls last' : sort === 'new' ? 'order by p.created_at desc' : 'order by p.updated_at desc') + ' limit ? offset ?'; args.push(limit, offset);
     res.json({ items: await db.prepare(sql).all(...args), limit, offset });
   });
   app.get('/api/products/:slug', catalogLimiter, async (req, res) => { const p = await db.prepare("select * from products where (slug=? or id=?) and status='published'").get(req.params.slug, req.params.slug) as any; if (!p) return safeError(res, 404, 'not_found', 'Товар не найден'); res.json({ product: p, plans: await db.prepare('select * from license_plans where product_id=? order by price_xtr').all(p.id) }); });
@@ -233,6 +234,16 @@ export function createApp() {
     if (!pending) return res.status(410).send('Link expired or already used');
     const claimed = await db.prepare("update delivery_events set status='streaming',claimed_at=CURRENT_TIMESTAMP,last_error=NULL where id=? and status='issued' returning id").get(pending.id);
     if (!claimed) return res.status(410).send('Link already used');
+    if (config.STORAGE_DRIVER === 's3') {
+      try {
+        const url = await storage.createDownloadUrl(pending.storage_key, Math.min(config.DOWNLOAD_TTL_SECONDS, 300), pending.file_name);
+        await db.prepare("update delivery_events set used_at=CURRENT_TIMESTAMP,status='used',last_error=NULL where id=? and status='streaming'").run(pending.id);
+        return res.redirect(302, url);
+      } catch (error) {
+        await db.prepare("update delivery_events set status='issued',claimed_at=NULL,last_error=? where id=? and status='streaming'").run('signed_url_generation_failed', pending.id);
+        throw error;
+      }
+    }
     let stream;
     try { stream = await readAsset(pending.storage_key); }
     catch (error) {
@@ -252,7 +263,7 @@ export function createApp() {
     stream.pipe(res);
   });
 
-  app.post('/api/admin/products', user, adminRole(['owner', 'editor']), limiter, async (req: any, res) => { const p = req.body; if (!p.title || p.title.length > 120 || !p.result || p.result.length > 240 || !['template', 'ready_bot', 'module', 'service'].includes(p.type) || !p.category) return safeError(res, 400, 'validation_failed', 'Проверьте поля товара'); const id = p.id || nanoid(8); await db.prepare('insert into products(id,slug,type,category,title,result,description,stack,demo_url,preview,version,changelog,status) values(?,?,?,?,?,?,?,?,?,?,?,?,?)').run(id, p.slug || id, p.type, p.category, p.title, p.result, p.description || '', p.stack || '', p.demo_url || '', p.preview || '', p.version || '1.0.0', p.changelog || '', p.status || 'draft'); await audit(req.userId, 'product_create', 'product', id); res.json({ id }); });
+  app.post('/api/admin/products', user, adminRole(['owner', 'editor']), limiter, async (req: any, res) => { const p = req.body; const status = ['draft', 'published', 'archived'].includes(String(p.status || 'draft')) ? String(p.status || 'draft') : ''; if (!p.title || String(p.title).length > 120 || !p.result || String(p.result).length > 240 || !['template', 'ready_bot', 'module', 'service'].includes(p.type) || String(p.category || '').length > 80 || !status || String(p.description || '').length > 4000 || String(p.stack || '').length > 1000 || String(p.demo_url || '').length > 500 || String(p.preview || '').length > 500 || String(p.version || '').length > 80 || String(p.changelog || '').length > 8000) return safeError(res, 400, 'validation_failed', 'Проверьте поля товара'); const id = p.id || nanoid(8); await db.prepare('insert into products(id,slug,type,category,title,result,description,stack,demo_url,preview,version,changelog,status) values(?,?,?,?,?,?,?,?,?,?,?,?,?)').run(id, p.slug || id, p.type, p.category, p.title, p.result, p.description || '', p.stack || '', p.demo_url || '', p.preview || '', p.version || '1.0.0', p.changelog || '', status); await audit(req.userId, 'product_create', 'product', id); res.json({ id }); });
   async function finalizeRefund(orderId: string, reason: string) {
     return db.transaction(async (tx) => {
       const finalized = await tx.prepare("update orders set status='refunded',refund_reason=?,refund_external_confirmed_at=COALESCE(refund_external_confirmed_at,CURRENT_TIMESTAMP),refunded_at=COALESCE(refunded_at,CURRENT_TIMESTAMP),refund_last_error=NULL where id=? and status in ('refund_requested','refund_manual_review','refunded') returning id").get(reason, orderId);
