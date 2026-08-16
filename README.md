@@ -9,7 +9,7 @@ CLOUD-BOT подготовлен как Release Candidate для staging/pre-rel
 | DB | SQLite | PostgreSQL | production старт блокируется, если `DB_DRIVER!=postgres` |
 | Sessions / rate limit | memory TTL store | Redis-compatible TTL store | production требует `REDIS_URL` и `REDIS_TLS=true` |
 | Storage | local private folder | S3-compatible private bucket | production требует `STORAGE_DRIVER=s3` и S3 env |
-| Upload scan | local buffer + scanner | same scanner + S3 quarantine | rejected asset never becomes downloadable |
+| Upload scan | disk quarantine + bounded scanner | same scanner + S3 quarantine | rejected asset never becomes downloadable |
 
 ## New production env
 
@@ -42,20 +42,22 @@ npm run test:e2e
 npm run typecheck
 npm run lint
 npm run build
+npm run perf:budget
 npm run db:status
 npm run db:migrate
 npm run security:scan
 npm run deps:audit
 npm run smoke:load
+npm run staging:smoke
 ```
 
 ## Storage/upload/scan flow
 
-`admin upload → memory upload limit → magic bytes / extension check → zip-slip / suspicious file / secret scan → S3/local quarantine or approved key → DB asset status → explicit publish → entitlement download`.
+`admin upload → disk quarantine + multipart limits → bounded scanner → magic bytes / extension check → zip-slip / suspicious file / secret scan → S3/local quarantine or approved key → DB asset status → explicit publish → entitlement download`.
 
 Asset statuses: `pending`, `scanning`, `approved`, `rejected`, `published`, `deleted`.
 
-Download is issued only after entitlement check. Download tokens are stored as hashes. In production S3 signed URLs are generated server-side with short TTL and no credentials exposed to frontend.
+Download is issued only after entitlement check. Download tokens are stored as hashes. Sessions are issued as HttpOnly SameSite cookies in production, while raw tokens are exposed only in test responses for legacy contract tests. In production S3 signed URLs are generated server-side with short TTL and no credentials exposed to frontend; expired delivery rows are cleaned opportunistically.
 
 ## DB migration
 
@@ -73,7 +75,7 @@ For SQLite import and rollback, follow `docs/runbooks/db-migration.md`. Do not s
 
 ## CI/CD
 
-GitHub Actions workflow is in `.github/workflows/ci.yml`: clean install, typecheck, lint, tests, build, security scan, dependency audit and Postgres migration dry-run with service containers.
+GitHub Actions workflow is in `.github/workflows/ci.yml`: clean install, typecheck, lint, tests, build, frontend bundle budget, security scan, dependency audit and Postgres migration dry-run with service containers. `.github/workflows/staging.yml` is a guarded Railway deployment gate enabled by repository variable `RAILWAY_STAGING_ENABLED=true`; it deploys with pinned CLI, applies all PostgreSQL migrations, checks schema status, and runs HTTPS liveness/readiness/metrics smoke verification. The container also exposes a Docker healthcheck against `/health/live`.
 
 ## Current residual risks
 
@@ -82,4 +84,6 @@ GitHub Actions workflow is in `.github/workflows/ci.yml`: clean install, typeche
 - Redis TTL store is implemented; production Redis TLS/connectivity must be verified externally.
 - Playwright e2e is added, but browser binaries/service execution may need CI cache/install setup.
 - Telegram Stars payment/refund cannot be evidenced without staging bot credentials.
+- OpenTelemetry export is disabled unless `OTEL_EXPORTER_OTLP_ENDPOINT` is configured; when enabled, the preload starts HTTP/Express/Redis/PostgreSQL auto-instrumentation and exports OTLP traces/metrics.
+- Background asset scanning uses Redis durable jobs with visibility recovery, exponential retry and a dead-letter list. Production requires the existing Redis service; staging should monitor the queue dead-letter key.
 - `server/pg-db.ts` uses manual SQL translation for `INSERT OR IGNORE`/`CURRENT_TIMESTAMP`; further hardening should move runtime paths to fully parameterized queries with explicit `ON CONFLICT` clauses.

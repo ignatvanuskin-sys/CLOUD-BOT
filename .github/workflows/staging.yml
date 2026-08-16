@@ -1,0 +1,52 @@
+name: staging
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+concurrency:
+  group: cloud-bot-staging
+  cancel-in-progress: false
+
+jobs:
+  deploy-and-verify:
+    if: ${{ github.event_name == 'workflow_dispatch' || vars.RAILWAY_STAGING_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    environment: railway-staging
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
+      - run: npm run perf:budget
+      - name: Deploy app service to Railway staging
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
+          RAILWAY_ENVIRONMENT_ID: ${{ vars.RAILWAY_ENVIRONMENT_ID }}
+          RAILWAY_SERVICE_ID: ${{ vars.RAILWAY_SERVICE_ID }}
+        run: npx --yes @railway/cli@5.41.2 up --ci --service "$RAILWAY_SERVICE_ID" --environment "$RAILWAY_ENVIRONMENT_ID"
+      - name: Apply staging migrations
+        env:
+          DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+          DATABASE_SSL: 'true'
+          DATABASE_SSL_REJECT_UNAUTHORIZED: 'true'
+        run: npm run db:migrate
+      - name: Verify staging schema
+        env:
+          DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+          DATABASE_SSL: 'true'
+          DATABASE_SSL_REJECT_UNAUTHORIZED: 'true'
+        run: npm run db:status
+      - name: Verify staging health
+        env:
+          STAGING_BASE_URL: ${{ vars.STAGING_BASE_URL }}
+          STAGING_METRICS_TOKEN: ${{ secrets.STAGING_METRICS_TOKEN }}
+        run: node scripts/staging-smoke.mjs

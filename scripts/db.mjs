@@ -6,6 +6,8 @@ const migrations = [
   ['001_initial', '001_initial.sql'],
   ['002_delivery_refund_state_machines', '002_delivery_refund_state_machines.sql'],
   ['003_catalog_trigram_search', '003_catalog_trigram_search.sql'],
+  ['004_catalog_sort_indexes', '004_catalog_sort_indexes.sql'],
+  ['005_delivery_cleanup_indexes', '005_delivery_cleanup_indexes.sql'],
 ];
 
 const cmd = process.argv[2];
@@ -74,7 +76,7 @@ async function migrate() {
 }
 
 async function verifyImport() {
-  const required = ['users', 'products', 'license_plans', 'orders', 'entitlements', 'product_assets', 'audit_log', 'webhook_updates'];
+  const required = ['users', 'products', 'license_plans', 'orders', 'entitlements', 'product_assets', 'audit_log', 'webhook_updates', 'schema_migrations'];
   const counts = {};
   for (const table of required) {
     if (!(await tableExists(table))) throw new Error(`missing table ${table}`);

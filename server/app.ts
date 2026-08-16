@@ -2,6 +2,8 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import multer from 'multer';
+import fs from 'node:fs';
+import { readFile, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { Bot } from 'grammy';
 import { nanoid } from 'nanoid';
@@ -13,13 +15,21 @@ import { scanArchiveBuffer } from './scanner';
 import { createTtlStore, type TtlStore } from './state';
 import { BOT_COMMANDS, registerBotHandlers, TELEGRAM_ALLOWED_UPDATES } from './telegram';
 import { safeErrorMeta } from './logging';
+import { metricsSnapshot, recordRequest } from './metrics';
+import { createDurableQueue, type DurableQueue, type QueueJob } from './queue';
 
 const runtimeStores = new Set<TtlStore>();
+const runtimeQueues = new Set<DurableQueue>();
 export async function closeRuntimeResources() {
   await Promise.allSettled([...runtimeStores].map((store) => store.close()));
-  runtimeStores.clear();
+  await Promise.allSettled([...runtimeQueues].map((queue) => queue.close()));
+  runtimeStores.clear(); runtimeQueues.clear();
 }
 
+const SESSION_COOKIE = 'cloud_bot_session';
+function parseCookies(header: string | undefined) { return Object.fromEntries((header || '').split(';').map((part) => part.trim().split('=' as const)).filter(([key, value]) => key && value).map(([key, value]) => [key, decodeURIComponent(value)])); }
+function cookieValue(token: string, secure: boolean, maxAge: number) { return `${SESSION_COOKIE}=${encodeURIComponent(token)}; Max-Age=${maxAge}; Path=/; HttpOnly; SameSite=Lax${secure ? '; Secure' : ''}`; }
+function clearSessionCookie(secure: boolean) { return `${SESSION_COOKIE}=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax${secure ? '; Secure' : ''}`; }
 function errorMeta(error: unknown, diagnosticId?: string) {
   return safeErrorMeta(error, loadConfig().isProduction, diagnosticId);
 }
@@ -28,7 +38,8 @@ export function createApp() {
   const config = loadConfig();
   const app = express();
   const ttlStore = createTtlStore(config);
-  runtimeStores.add(ttlStore);
+  const queue = createDurableQueue(config);
+  runtimeStores.add(ttlStore); runtimeQueues.add(queue);
   const bot = config.BOT_TOKEN && config.BOT_TOKEN !== 'TEST_TOKEN' ? new Bot(config.BOT_TOKEN) : null;
   let botStatus: 'disabled' | 'initializing' | 'ready' | 'failed' = bot ? 'initializing' : 'disabled';
 
@@ -59,11 +70,13 @@ export function createApp() {
     }
   })() : Promise.resolve();
 
-  const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: config.MAX_UPLOAD_BYTES, files: 1, fields: 8, parts: 10, fieldSize: 16 * 1024 } });
+  const uploadDir = path.resolve(config.STORAGE_LOCAL_ROOT, '.upload-quarantine');
+  fs.mkdirSync(uploadDir, { recursive: true });
+  const upload = multer({ storage: multer.diskStorage({ destination: (_req, _file, cb) => cb(null, uploadDir), filename: (_req, file, cb) => cb(null, `${Date.now()}-${nanoid(16)}-${path.basename(file.originalname).replace(/[^a-zA-Z0-9_.-]/g, '_')}`) }), limits: { fileSize: config.MAX_UPLOAD_BYTES, files: 1, fields: 8, parts: 10, fieldSize: 16 * 1024 } });
   app.set('trust proxy', config.TRUST_PROXY_HOPS);
   app.use((req, res, next) => { res.locals.requestId = nanoid(10); res.setHeader('x-request-id', res.locals.requestId); next(); });
   app.use(helmet({ contentSecurityPolicy: { directives: { scriptSrc: ["'self'", 'https://telegram.org'], connectSrc: ["'self'", 'https://telegram.org'] } } }));
-  app.use(cors({ origin: (origin, cb) => (!origin || !config.isProduction || origin === config.allowedOrigin ? cb(null, true) : cb(new Error('cors_denied'))), credentials: false }));
+  app.use(cors({ origin: (origin, cb) => (!origin || !config.isProduction || origin === config.allowedOrigin ? cb(null, true) : cb(new Error('cors_denied'))), credentials: true }));
   app.use(express.json({ limit: '128kb' }));
   app.use((req, res, next) => { req.setTimeout(30_000); res.setTimeout(30_000); next(); });
 
@@ -76,7 +89,9 @@ export function createApp() {
     const writeLog = (event: string) => {
       if (logged) return;
       logged = true;
-      console.log(JSON.stringify({ ts: new Date().toISOString(), level: 'info', event, method: req.method, path: safeLogPath, status: res.statusCode, durationMs: Date.now() - startedAt, requestId: res.locals.requestId }));
+      const durationMs = Date.now() - startedAt;
+      recordRequest(res.statusCode, durationMs);
+      console.log(JSON.stringify({ ts: new Date().toISOString(), level: 'info', event, method: req.method, path: safeLogPath, status: res.statusCode, durationMs, requestId: res.locals.requestId }));
     };
     res.on('finish', () => writeLog('http_request_end'));
     res.on('close', () => writeLog('http_request_aborted'));
@@ -85,6 +100,13 @@ export function createApp() {
 
   function log(level: string, event: string, meta: Record<string, unknown> = {}) { console.log(JSON.stringify({ ts: new Date().toISOString(), level, event, ...meta })); }
   function safeError(res: any, status: number, code: string, message = 'Ошибка запроса') { return res.status(status).json({ error: { code, message, requestId: res.locals.requestId } }); }
+  app.use((req: any, res: any, next: any) => {
+    if (req.path.startsWith('/api/auth/') || req.path.startsWith('/api/me') || req.path.startsWith('/api/orders') || req.path.startsWith('/api/purchases')) res.setHeader('Cache-Control', 'no-store');
+    const stateChanging = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method);
+    const origin = String(req.headers.origin || '');
+    if (config.isProduction && stateChanging && !req.path.startsWith('/api/webhooks/') && origin && origin !== config.allowedOrigin) return safeError(res, 403, 'csrf_origin_rejected', 'Источник запроса не разрешён');
+    next();
+  });
   function rateLimiter(limit: number, scope: string) { return async (req: any, res: any, next: any) => {
     try {
       const count = await ttlStore.incrWithTtl(`rl:${scope}:${req.userId || req.ip}`, 60);
@@ -98,7 +120,8 @@ export function createApp() {
   const limiter = rateLimiter(80, 'api');
   const catalogLimiter = rateLimiter(120, 'catalog');
   async function user(req: any, res: any, next: any) {
-    const token = String(req.headers.authorization || '').replace(/^Bearer /, '');
+    const authorization = String(req.headers.authorization || '');
+    const token = authorization.startsWith('Bearer ') ? authorization.slice(7).trim() : parseCookies(req.headers.cookie)[SESSION_COOKIE];
     if (!token) return safeError(res, 401, 'auth_required', 'Требуется вход через Telegram');
     const raw = await ttlStore.get(`session:${hashToken(token)}`);
     if (!raw) return safeError(res, 401, 'auth_required', 'Требуется вход через Telegram');
@@ -114,6 +137,7 @@ export function createApp() {
   async function event(userId: number, eventName: string, productId?: string, meta?: any) { await db.prepare('insert into analytics(user_id,event,product_id,meta) values(?,?,?,?)').run(userId, eventName, productId || null, meta ? JSON.stringify(meta) : null); }
 
   app.get('/health/live', (_req, res) => res.json({ ok: true }));
+  app.get('/health/metrics', (req, res) => { const expected = config.METRICS_TOKEN; const supplied = String(req.headers['x-metrics-token'] || ''); if (config.isProduction && (!expected || supplied !== expected)) return safeError(res, 404, 'not_found', 'Ресурс не найден'); return res.json(metricsSnapshot()); });
   app.get('/health/ready', async (_req, res) => {
     try {
       await db.prepare(config.isProduction ? "select version from schema_migrations where version='001_initial'" : 'select 1').get();
@@ -135,12 +159,13 @@ export function createApp() {
     const token = nanoid(48);
     await ttlStore.set(`session:${hashToken(token)}`, JSON.stringify({ userId: row.id }), config.SESSION_TTL_SECONDS);
     await event(row.id, 'app_open');
-    res.json({ token, expiresIn: config.SESSION_TTL_SECONDS, user: { id: row.id, name: info.first_name || 'Telegram user' } });
+    res.setHeader('Set-Cookie', cookieValue(token, config.isProduction, config.SESSION_TTL_SECONDS));
+    res.json({ ...(config.NODE_ENV === 'test' ? { token } : {}), expiresIn: config.SESSION_TTL_SECONDS, user: { id: row.id, name: info.first_name || 'Telegram user' } });
   });
 
   app.get('/api/me', user, async (req: any, res) => res.json({ user: await db.prepare('select id,name from users where id=?').get(req.userId) }));
   app.get('/api/products', catalogLimiter, async (req, res) => {
-    const limit = Math.min(Math.max(Number(req.query.limit || 30), 1), 50); const offset = Math.max(Number(req.query.offset || 0), 0);
+    const limit = Math.min(Math.max(Number(req.query.limit || 30), 1), 50); const offset = Math.min(Math.max(Number(req.query.offset || 0), 0), 10000);
     const sort = ['popular', 'new', 'price'].includes(String(req.query.sort)) ? String(req.query.sort) : 'popular';
     let sql = "select p.id,p.slug,p.type,p.category,p.title,p.result,p.description,p.stack,p.demo_url,p.version,p.changelog,l.price_from from products p left join (select product_id,min(price_xtr) price_from from license_plans group by product_id) l on l.product_id=p.id where p.status='published'"; const args: any[] = [];
     if (req.query.q) { const q = `%${String(req.query.q).slice(0, 80)}%`; if (config.DB_DRIVER === 'postgres') { sql += " and lower(coalesce(p.title,'') || ' ' || coalesce(p.result,'') || ' ' || coalesce(p.description,'') || ' ' || coalesce(p.stack,'')) like lower(?)"; args.push(q); } else { sql += ' and (lower(p.title) like lower(?) or lower(p.result) like lower(?) or lower(p.description) like lower(?) or lower(p.stack) like lower(?))'; args.push(q, q, q, q); } }
@@ -190,6 +215,8 @@ export function createApp() {
     await botReady;
     if (bot && botStatus !== 'ready') return safeError(res, 503, 'telegram_unavailable', 'Telegram handler unavailable');
     const update = req.body;
+    const updateDate = Number(update.message?.date || update.edited_message?.date || 0);
+    if (config.isProduction && updateDate > 0 && Math.abs(Math.floor(Date.now() / 1000) - updateDate) > 300) { log('warn', 'telegram_update_stale', { updateId: update.update_id }); return safeError(res, 400, 'stale_update', 'Устаревшее обновление'); }
     if (update.pre_checkout_query) {
       const q = update.pre_checkout_query;
       const order = await db.prepare('select o.*,u.telegram_id payer_telegram_id from orders o join users u on u.id=o.user_id where o.payload=?').get(q.invoice_payload) as any;
@@ -223,6 +250,7 @@ export function createApp() {
 
   app.get('/api/me/purchases', user, async (req: any, res) => res.json({ items: await db.prepare('select e.*,p.title,p.version,l.name license_name from entitlements e join products p on p.id=e.product_id join license_plans l on l.id=e.license_id where e.user_id=? and e.active=1 order by e.created_at desc').all(req.userId) }));
   app.post('/api/purchases/:id/download', user, limiter, async (req: any, res) => {
+    await db.prepare("delete from delivery_events where expires_at < ? and status in ('issued','streaming')").run(Math.floor(Date.now() / 1000));
     const e = await db.prepare('select e.*,p.version from entitlements e join products p on p.id=e.product_id where e.id=? and e.user_id=? and e.active=1').get(req.params.id, req.userId) as any; if (!e) return safeError(res, 404, 'entitlement_not_found', 'Покупка не найдена');
     const asset = await db.prepare("select * from product_assets where product_id=? and version=? and status='published' order by created_at desc").get(e.product_id, e.version) as any;
     if (!asset) return safeError(res, 404, 'asset_not_found', 'Файл ещё не опубликован');
@@ -256,7 +284,8 @@ export function createApp() {
       settled = true;
       await db.prepare("update delivery_events set status='issued',claimed_at=NULL,last_error=? where id=? and status='streaming'").run(error instanceof Error ? error.message.slice(0, 500) : String(error).slice(0, 500), pending.id);
     };
-    res.setHeader('Content-Type', pending.mime_type); res.setHeader('Content-Disposition', `attachment; filename="${String(pending.file_name).replace(/"/g, '')}"`);
+    const safeFileName = String(pending.file_name).replace(/[\r\n"]/g, '').slice(0, 180) || 'download.bin';
+    res.setHeader('Content-Type', pending.mime_type); res.setHeader('Content-Disposition', `attachment; filename="${safeFileName}"`);
     stream.on('error', (error) => { void release(error).finally(() => { log('error', 'download_stream_failed', { requestId: res.locals.requestId, ...errorMeta(error) }); if (!res.headersSent) res.status(502).end(); else res.destroy(error); }); });
     res.on('finish', () => { if (!settled) { settled = true; void db.prepare("update delivery_events set used_at=CURRENT_TIMESTAMP,status='used',last_error=NULL where id=? and status='streaming'").run(pending.id); } });
     res.on('close', () => { if (!res.writableFinished) void release(new Error('client_aborted')); });
@@ -318,30 +347,56 @@ export function createApp() {
     await audit(req.userId, 'refund_reconcile_not_refunded', 'order', order.id, order.status === 'fulfilled' ? 'idempotent' : 'ok', { note });
     return res.json({ ok: true, status: 'fulfilled', idempotent: order.status === 'fulfilled' });
   });
+  async function processAssetScan(job: QueueJob) {
+    const payload = job.payload as { assetId: string; productId: string; version: string; key: string; fileName: string; mimeType: string };
+    const stream = await readAsset(payload.key); const chunks: Buffer[] = []; let total = 0;
+    for await (const chunk of stream) { const part = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk); total += part.length; if (total > config.MAX_UPLOAD_BYTES) throw new Error('asset_scan_size_limit'); chunks.push(part); }
+    const buffer = Buffer.concat(chunks); const scan = await scanArchiveBuffer(buffer, payload.fileName, payload.mimeType);
+    if (scan.ok) {
+      const approvedKey = createAssetKey(payload.productId, payload.version, payload.assetId, payload.fileName, false);
+      await storage.putObject({ key: approvedKey, body: buffer, contentType: payload.mimeType, fileName: payload.fileName });
+      await storage.deleteObject(payload.key);
+      await db.prepare("update product_assets set storage_key=?,status='approved',scan_findings=?,quarantine_key=NULL where id=? and status='scanning'").run(approvedKey, JSON.stringify(scan.findings), payload.assetId);
+    } else {
+      await db.prepare("update product_assets set status='rejected',scan_findings=?,quarantine_key=? where id=? and status='scanning'").run(JSON.stringify(scan.findings), payload.key, payload.assetId);
+    }
+    await audit(null, 'asset_upload_scan', 'asset', payload.assetId, scan.ok ? 'approved' : 'rejected', { findings: scan.findings, jobId: job.id });
+  }
   app.post('/api/admin/assets/upload', user, adminRole(['owner', 'editor']), limiter, upload.single('file'), async (req: any, res) => {
     const file = req.file; const productId = String(req.body.productId || ''); const version = String(req.body.version || '');
-    if (!file || !productId || !version) return safeError(res, 400, 'upload_required', 'Нужен файл, productId и version');
-    const product = await db.prepare('select * from products where id=?').get(productId) as any; if (!product) return safeError(res, 404, 'product_not_found', 'Товар не найден');
-    const scan = await scanArchiveBuffer(file.buffer, file.originalname, file.mimetype); const assetId = nanoid(); const key = createAssetKey(productId, version, assetId, file.originalname, !scan.ok);
-    const stored = await storage.putObject({ key, body: file.buffer, contentType: file.mimetype, fileName: file.originalname });
+    if (!file || !productId || !version) { if (file?.path) await unlink(file.path).catch(() => undefined); return safeError(res, 400, 'upload_required', 'Нужен файл, productId и version'); }
     try {
-      await db.prepare('insert into product_assets(id,product_id,version,storage_key,file_name,mime_type,size_bytes,checksum_sha256,status,scan_findings,quarantine_key) values(?,?,?,?,?,?,?,?,?,?,?)').run(assetId, productId, version, key, file.originalname.replace(/[^a-zA-Z0-9_.-]/g, '_'), file.mimetype, stored.size, stored.checksum, scan.ok ? 'approved' : 'rejected', JSON.stringify(scan.findings), scan.ok ? null : key);
-    } catch (error) {
-      try { await storage.deleteObject(key); }
-      catch (cleanupError) { log('error', 'asset_upload_compensation_failed', { requestId: res.locals.requestId, storageKey: key, ...errorMeta(cleanupError, res.locals.requestId) }); }
-      throw error;
+      const product = await db.prepare('select id from products where id=?').get(productId) as any;
+      if (!product) return safeError(res, 404, 'product_not_found', 'Товар не найден');
+      const buffer = await readFile(file.path); const assetId = nanoid(); const key = createAssetKey(productId, version, assetId, file.originalname, true);
+      const stored = await storage.putObject({ key, body: buffer, contentType: file.mimetype, fileName: file.originalname });
+      try {
+        await db.prepare('insert into product_assets(id,product_id,version,storage_key,file_name,mime_type,size_bytes,checksum_sha256,status,scan_findings,quarantine_key) values(?,?,?,?,?,?,?,?,?,?,?)').run(assetId, productId, version, key, file.originalname.replace(/[^a-zA-Z0-9_.-]/g, '_'), file.mimetype, stored.size, stored.checksum, 'scanning', null, key);
+        const jobId = await queue.enqueue('asset_scan', { assetId, productId, version, key, fileName: file.originalname, mimeType: file.mimetype });
+        await audit(req.userId, 'asset_upload_queued', 'asset', assetId, 'ok', { jobId });
+        return res.status(202).json({ id: assetId, status: 'scanning', jobId });
+      } catch (error) {
+        try { await storage.deleteObject(key); } catch (cleanupError) { log('error', 'asset_upload_compensation_failed', { requestId: res.locals.requestId, storageKey: key, ...errorMeta(cleanupError, res.locals.requestId) }); }
+        throw error;
+      }
+    } finally {
+      await unlink(file.path).catch((error) => log('warn', 'upload_quarantine_cleanup_failed', { requestId: res.locals.requestId, ...errorMeta(error, res.locals.requestId) }));
     }
-    await audit(req.userId, 'asset_upload_scan', 'asset', assetId, scan.ok ? 'approved' : 'rejected', { findings: scan.findings }); res.status(scan.ok ? 201 : 422).json({ id: assetId, status: scan.ok ? 'approved' : 'rejected', findings: scan.findings });
   });
   app.post('/api/admin/assets/:id/publish', user, adminRole(['owner', 'editor']), limiter, async (req: any, res) => { const asset = await db.prepare('select * from product_assets where id=?').get(req.params.id) as any; if (!asset || !['approved', 'published'].includes(asset.status)) return safeError(res, 409, 'asset_not_approved', 'Asset не прошёл проверку'); await db.prepare("update product_assets set status='published' where id=?").run(asset.id); await audit(req.userId, 'asset_publish', 'asset', asset.id); res.json({ ok: true }); });
-  app.post('/api/auth/logout', user, async (req: any, res) => { const token = String(req.headers.authorization || '').replace(/^Bearer /, ''); await ttlStore.del(`session:${hashToken(token)}`); await event(req.userId, 'logout'); res.json({ ok: true }); });
+  app.post('/api/auth/logout', user, async (req: any, res) => { const authorization = String(req.headers.authorization || ''); const token = authorization.startsWith('Bearer ') ? authorization.slice(7).trim() : parseCookies(req.headers.cookie)[SESSION_COOKIE]; await ttlStore.del(`session:${hashToken(token)}`); res.setHeader('Set-Cookie', clearSessionCookie(config.isProduction)); await event(req.userId, 'logout'); res.json({ ok: true }); });
 
   app.get(/.*/, (req, res, next) => { if (req.path.startsWith('/api/') || req.path.startsWith('/health/')) return next(); res.sendFile(path.join(distDir, 'index.html')); });
   app.use((error: unknown, req: express.Request, res: express.Response, next: express.NextFunction) => {
     void next;
+    if (error instanceof multer.MulterError) {
+      const status = error.code === 'LIMIT_FILE_SIZE' ? 413 : 400;
+      return safeError(res, status, 'upload_rejected', error.code === 'LIMIT_FILE_SIZE' ? 'Файл превышает допустимый размер' : 'Некорректная multipart-загрузка');
+    }
     log('error', 'http_request_failed', { requestId: res.locals.requestId, method: req.method, path: req.path, ...errorMeta(error) });
     if (res.headersSent) return res.end();
     return safeError(res, 500, 'internal_error', 'Внутренняя ошибка сервера');
   });
+  queue.start(async (job) => { if (job.type === 'asset_scan') return processAssetScan(job); throw new Error(`unknown_job_type:${job.type}`); });
   return app;
 }

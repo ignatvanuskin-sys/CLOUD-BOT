@@ -38,6 +38,12 @@ REDIS_URL=${{Redis.REDIS_URL}}
 REDIS_KEY_PREFIX=cloud-bot:staging:
 REDIS_TLS=true
 
+METRICS_TOKEN=<random metrics secret>
+OTEL_EXPORTER_OTLP_ENDPOINT=<HTTPS OTLP collector endpoint>
+OTEL_EXPORTER_OTLP_HEADERS=authorization=Bearer-<secret-managed-value>
+OTEL_SERVICE_NAME=cloud-bot-staging
+OTEL_METRIC_EXPORT_INTERVAL_MS=30000
+
 STORAGE_DRIVER=s3
 S3_ENDPOINT=<Cloudflare R2 S3 API endpoint>
 S3_REGION=auto
@@ -69,11 +75,14 @@ npm run db:migrate
 npm run db:status
 ```
 
+For GitHub automation, set repository variable `RAILWAY_STAGING_ENABLED=true`, variables `RAILWAY_PROJECT_ID`, `RAILWAY_ENVIRONMENT_ID`, `RAILWAY_SERVICE_ID`, `STAGING_BASE_URL`, and environment secrets `RAILWAY_TOKEN`, `STAGING_DATABASE_URL`, `STAGING_METRICS_TOKEN`. The guarded `.github/workflows/staging.yml` deploys with the pinned Railway CLI, applies immutable migrations, checks schema status, and runs HTTPS health/metrics smoke tests.
+
 7. Check:
 
 ```text
 /health/live
 /health/ready
+/health/metrics (with x-metrics-token)
 ```
 
 ## 4. Telegram setup

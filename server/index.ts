@@ -4,6 +4,7 @@ import { closeRuntimeResources, createApp } from './app';
 import { bootstrapAdmins, closeDb, migrate } from './db';
 import { loadConfig } from './config';
 import { safeErrorMeta } from './logging';
+import { stopTelemetry } from './telemetry';
 
 const config = loadConfig();
 let shuttingDown = false;
@@ -31,6 +32,7 @@ async function start() {
     server.close(async () => {
       await closeRuntimeResources();
       await closeDb();
+      await stopTelemetry();
       clearTimeout(forced);
       console.log(JSON.stringify({ ts: new Date().toISOString(), level: 'info', event: 'shutdown_completed', signal }));
       process.exit(exitCode);
