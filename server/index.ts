@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { createServer } from 'node:http';
 import { closeRuntimeResources, createApp } from './app';
 import { bootstrapAdmins, closeDb, migrate } from './db';
+import { seedDevelopmentFixtures } from './seed';
 import { loadConfig } from './config';
 import { safeErrorMeta } from './logging';
 import { stopTelemetry } from './telemetry';
@@ -12,7 +13,8 @@ let shuttingDown = false;
 async function start() {
   const startedAt = Date.now();
   await migrate();
-  await bootstrapAdmins();
+  if (!config.isProduction && config.NODE_ENV === 'development' && process.env.SEED_DEV_DATA !== 'false') await seedDevelopmentFixtures();
+  else await bootstrapAdmins();
   console.log(JSON.stringify({ ts: new Date().toISOString(), level: 'info', event: 'database_migrations_ready', durationMs: Date.now() - startedAt }));
   const server = createServer(createApp());
   server.on('error', (error) => {

@@ -18,6 +18,7 @@ const EnvSchema = z.object({
 
   SESSION_TTL_SECONDS: z.coerce.number().int().min(300).max(86400).default(3600),
   ALLOW_DEV_LOGIN: z.enum(['true', 'false']).default('false'),
+  SEED_DEV_DATA: z.enum(['true', 'false']).default('false'),
   ADMIN_TELEGRAM_IDS: z.string().default(''),
 
   STORAGE_DRIVER: z.enum(['local', 's3']).default('local'),
@@ -52,6 +53,7 @@ export function loadConfig(env = process.env): AppConfig {
       if (!config[key]) missing.push(key);
     }
     if (config.ALLOW_DEV_LOGIN === 'true') missing.push('ALLOW_DEV_LOGIN must be false in production');
+    if (config.SEED_DEV_DATA === 'true') missing.push('SEED_DEV_DATA must be false in production');
     if (config.BOT_TOKEN === 'TEST_TOKEN') missing.push('BOT_TOKEN must be a real Telegram bot token in production');
     for (const [key, value] of [['WEBAPP_URL', config.WEBAPP_URL], ['CORS_ORIGIN', config.CORS_ORIGIN]] as const) {
       if (value && new URL(value).protocol !== 'https:') missing.push(`${key} must use https in production`);

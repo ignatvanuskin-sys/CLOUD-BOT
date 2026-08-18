@@ -54,12 +54,20 @@ describe('Production configuration guards', () => {
     delete process.env.DATABASE_URL;
     delete process.env.REDIS_URL;
     delete process.env.S3_ENDPOINT;
+    delete process.env.SEED_DEV_DATA;
   });
 
   it('rejects the known TEST_TOKEN in production', async () => {
     setProductionEnv({ BOT_TOKEN: 'TEST_TOKEN' });
     const { loadConfig } = await import('../server/config');
     expect(() => loadConfig()).toThrow(/BOT_TOKEN must be a real Telegram bot token/);
+  });
+
+  it('rejects development fixture seeding in production', async () => {
+    setProductionEnv();
+    process.env.SEED_DEV_DATA = 'true';
+    const { loadConfig } = await import('../server/config');
+    expect(() => loadConfig()).toThrow(/SEED_DEV_DATA must be false in production/);
   });
 });
 
