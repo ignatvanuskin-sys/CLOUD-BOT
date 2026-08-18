@@ -3,6 +3,7 @@ import request from 'supertest';
 import type { Express } from 'express';
 
 const WEBHOOK_SECRET = 'test-secret-token-123';
+const PRODUCTION_FAKE_BOT_TOKEN = '123:AAAAAAAAAAAAAAAAAAAA';
 
 function setTestEnv() {
   process.env.NODE_ENV = 'test';
@@ -30,7 +31,7 @@ function setProductionEnv(overrides: Record<string, string> = {}) {
   process.env.S3_ACCESS_KEY_ID = 'test';
   process.env.S3_SECRET_ACCESS_KEY = 'test';
   process.env.S3_FORCE_PATH_STYLE = 'true';
-  process.env.BOT_TOKEN = overrides.BOT_TOKEN || 'TEST_TOKEN';
+  process.env.BOT_TOKEN = overrides.BOT_TOKEN || PRODUCTION_FAKE_BOT_TOKEN;
   process.env.BOT_USERNAME = 'test_bot';
   process.env.WEBAPP_URL = 'https://test.example.com';
   process.env.CORS_ORIGIN = 'https://test.example.com';
@@ -45,6 +46,22 @@ async function cleanupApp() {
   await closeRuntimeResources();
   await closeDb();
 }
+
+describe('Production configuration guards', () => {
+  afterEach(() => {
+    delete process.env.NODE_ENV;
+    delete process.env.BOT_TOKEN;
+    delete process.env.DATABASE_URL;
+    delete process.env.REDIS_URL;
+    delete process.env.S3_ENDPOINT;
+  });
+
+  it('rejects the known TEST_TOKEN in production', async () => {
+    setProductionEnv({ BOT_TOKEN: 'TEST_TOKEN' });
+    const { loadConfig } = await import('../server/config');
+    expect(() => loadConfig()).toThrow(/BOT_TOKEN must be a real Telegram bot token/);
+  });
+});
 
 describe('Health and readiness endpoints', () => {
   afterAll(async () => {
@@ -176,12 +193,12 @@ describe('Health and readiness endpoints', () => {
     });
   });
 
-  describe('when Telegram is unavailable (production mode with TEST_TOKEN)', () => {
+  describe('when Telegram is unavailable (production mode)', () => {
     let app: Express;
 
     beforeEach(async () => {
       vi.resetModules();
-      setProductionEnv({ BOT_TOKEN: 'TEST_TOKEN' });
+      setProductionEnv({ BOT_TOKEN: PRODUCTION_FAKE_BOT_TOKEN });
       const { migrate } = await import('../server/db');
       try { await migrate(); } catch { /* expected: DB unreachable in this test env */ }
       app = (await import('../server/app')).createApp();
@@ -200,7 +217,7 @@ describe('Health and readiness endpoints', () => {
 
     it('does not leak the bot token or webhook secret in readiness response', async () => {
       const res = await request(app).get('/health/ready').expect(503);
-      expect(JSON.stringify(res.body)).not.toContain('TEST_TOKEN');
+      expect(JSON.stringify(res.body)).not.toContain(PRODUCTION_FAKE_BOT_TOKEN);
       expect(JSON.stringify(res.body)).not.toContain(WEBHOOK_SECRET);
       expect(JSON.stringify(res.body)).not.toHaveProperty('telegramError');
     });

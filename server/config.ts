@@ -52,6 +52,7 @@ export function loadConfig(env = process.env): AppConfig {
       if (!config[key]) missing.push(key);
     }
     if (config.ALLOW_DEV_LOGIN === 'true') missing.push('ALLOW_DEV_LOGIN must be false in production');
+    if (config.BOT_TOKEN === 'TEST_TOKEN') missing.push('BOT_TOKEN must be a real Telegram bot token in production');
     for (const [key, value] of [['WEBAPP_URL', config.WEBAPP_URL], ['CORS_ORIGIN', config.CORS_ORIGIN]] as const) {
       if (value && new URL(value).protocol !== 'https:') missing.push(`${key} must use https in production`);
     }

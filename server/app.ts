@@ -181,7 +181,7 @@ export function createApp() {
     const idempotencyKey = String(req.headers['idempotency-key'] || req.body.idempotencyKey || '').trim();
     if (!/^[A-Za-z0-9_-]{16,128}$/.test(idempotencyKey)) return safeError(res, 400, 'idempotency_key_required', 'Передайте корректный Idempotency-Key');
     const plan = await db.prepare('select * from license_plans where id=?').get(req.body.licenseId) as any; if (!plan) return safeError(res, 404, 'license_not_found', 'Лицензия недоступна');
-    const product = await db.prepare("select * from products where id=? and status='published'").get(plan.product_id) as any; if (!product) return safeError(res, 404, 'product_not_found', 'Товар недоступен');
+    const product = await db.prepare("select * from products where id=? and status='published' and type<>'template'" ).get(plan.product_id) as any; if (!product) return safeError(res, 404, 'product_not_found', 'Товар недоступен');
     const existing = await db.prepare('select * from orders where user_id=? and idempotency_key=?').get(req.userId, idempotencyKey) as any;
     if (existing) {
       if (existing.license_id !== plan.id) return safeError(res, 409, 'idempotency_key_conflict', 'Ключ уже использован для другой покупки');
@@ -199,12 +199,12 @@ export function createApp() {
     await event(req.userId, 'checkout_started', product.id, { licenseId: plan.id }); res.status(201).json({ order: { id, product_id: product.id, license_id: plan.id, amount_xtr: plan.price_xtr, currency: 'XTR', status: 'pending' }, idempotent: false });
   });
   app.get('/api/orders/:id', user, async (req: any, res) => {
-    const order = await db.prepare('select id,product_id,license_id,amount_xtr,currency,status,created_at from orders where id=? and user_id=?').get(req.params.id, req.userId) as any;
+    const order = await db.prepare('select o.id,o.product_id,o.license_id,o.amount_xtr,o.currency,o.status,o.created_at from orders o join products p on p.id=o.product_id and p.type<>\'template\' where o.id=? and o.user_id=?').get(req.params.id, req.userId) as any;
     if (!order) return safeError(res, 404, 'order_not_found', 'Заказ не найден');
     res.json({ order });
   });
   app.post('/api/orders/:id/invoice', user, limiter, async (req: any, res) => {
-    const order = await db.prepare('select * from orders where id=? and user_id=?').get(req.params.id, req.userId) as any; if (!order) return safeError(res, 404, 'order_not_found', 'Заказ не найден'); if (order.status !== 'pending') return safeError(res, 409, 'order_not_pending', 'Заказ уже обработан');
+    const order = await db.prepare('select o.* from orders o join products p on p.id=o.product_id and p.type<>\'template\' where o.id=? and o.user_id=?').get(req.params.id, req.userId) as any; if (!order) return safeError(res, 404, 'order_not_found', 'Заказ не найден'); if (order.status !== 'pending') return safeError(res, 409, 'order_not_pending', 'Заказ уже обработан');
     if (!bot || botStatus !== 'ready') return safeError(res, 503, 'telegram_unavailable', 'Telegram временно недоступен');
     const link = await bot.api.createInvoiceLink(`Покупка: ${order.product_title}`, 'Цифровой товар. Доступ выдаётся после successful_payment.', order.payload, '', 'XTR', [{ label: order.product_title, amount: order.amount_xtr }]);
     await db.prepare('update orders set invoice_link=? where id=?').run(link, order.id); await event(req.userId, 'invoice_opened', order.product_id); res.json({ invoiceLink: link });
@@ -219,7 +219,7 @@ export function createApp() {
     if (config.isProduction && updateDate > 0 && Math.abs(Math.floor(Date.now() / 1000) - updateDate) > 300) { log('warn', 'telegram_update_stale', { updateId: update.update_id }); return safeError(res, 400, 'stale_update', 'Устаревшее обновление'); }
     if (update.pre_checkout_query) {
       const q = update.pre_checkout_query;
-      const order = await db.prepare('select o.*,u.telegram_id payer_telegram_id from orders o join users u on u.id=o.user_id where o.payload=?').get(q.invoice_payload) as any;
+      const order = await db.prepare('select o.*,u.telegram_id payer_telegram_id from orders o join users u on u.id=o.user_id join products p on p.id=o.product_id and p.type<>\'template\' where o.payload=?').get(q.invoice_payload) as any;
       const ok = Boolean(order && String(q.from?.id) === String(order.payer_telegram_id) && order.status === 'pending' && q.currency === 'XTR' && Number(q.total_amount) === Number(order.amount_xtr));
       if (bot) await bot.api.answerPreCheckoutQuery(q.id, ok, ok ? undefined : { error_message: 'Заказ устарел или цена изменилась. Создайте новый заказ.' });
       else if (config.NODE_ENV !== 'test') return safeError(res, 503, 'telegram_unavailable', 'Telegram handler unavailable');
@@ -232,7 +232,7 @@ export function createApp() {
           const inserted = await tx.prepare('insert into webhook_updates(update_id) values(?) on conflict(update_id) do nothing').run(String(update.update_id));
           if (inserted.changes === 0) return { kind: 'duplicate' as const };
         }
-        const order = await tx.prepare('select o.*,u.telegram_id payer_telegram_id from orders o join users u on u.id=o.user_id where o.payload=?').get(payment.invoice_payload) as any;
+        const order = await tx.prepare('select o.*,u.telegram_id payer_telegram_id from orders o join users u on u.id=o.user_id join products p on p.id=o.product_id and p.type<>\'template\' where o.payload=?').get(payment.invoice_payload) as any;
         if (!order || String(update.message?.from?.id) !== String(order.payer_telegram_id) || payment.currency !== 'XTR' || Number(payment.total_amount) !== Number(order.amount_xtr)) return { kind: 'invalid' as const };
         const fulfilled = await tx.prepare("update orders set status='fulfilled',telegram_charge_id=?,paid_at=CURRENT_TIMESTAMP,fulfilled_at=CURRENT_TIMESTAMP where id=? and status in ('pending','expired') returning id").get(payment.telegram_payment_charge_id, order.id);
         if (!fulfilled) return { kind: 'already_processed' as const };
@@ -248,10 +248,10 @@ export function createApp() {
     return res.json({ ok: true, handledBy: 'grammy' });
   });
 
-  app.get('/api/me/purchases', user, async (req: any, res) => res.json({ items: await db.prepare('select e.*,p.title,p.version,l.name license_name from entitlements e join products p on p.id=e.product_id join license_plans l on l.id=e.license_id where e.user_id=? and e.active=1 order by e.created_at desc').all(req.userId) }));
+  app.get('/api/me/purchases', user, async (req: any, res) => res.json({ items: await db.prepare('select e.*,p.title,p.version,l.name license_name from entitlements e join products p on p.id=e.product_id and p.type<>\'template\' join license_plans l on l.id=e.license_id where e.user_id=? and e.active=1 order by e.created_at desc').all(req.userId) }));
   app.post('/api/purchases/:id/download', user, limiter, async (req: any, res) => {
     await db.prepare("delete from delivery_events where expires_at < ? and status in ('issued','streaming')").run(Math.floor(Date.now() / 1000));
-    const e = await db.prepare('select e.*,p.version from entitlements e join products p on p.id=e.product_id where e.id=? and e.user_id=? and e.active=1').get(req.params.id, req.userId) as any; if (!e) return safeError(res, 404, 'entitlement_not_found', 'Покупка не найдена');
+    const e = await db.prepare('select e.*,p.version from entitlements e join products p on p.id=e.product_id and p.type<>\'template\' where e.id=? and e.user_id=? and e.active=1').get(req.params.id, req.userId) as any; if (!e) return safeError(res, 404, 'entitlement_not_found', 'Покупка не найдена');
     const asset = await db.prepare("select * from product_assets where product_id=? and version=? and status='published' order by created_at desc").get(e.product_id, e.version) as any;
     if (!asset) return safeError(res, 404, 'asset_not_found', 'Файл ещё не опубликован');
     const token = nanoid(40); const ttl = config.DOWNLOAD_TTL_SECONDS; await db.prepare('insert into delivery_events(id,entitlement_id,asset_id,token_hash,expires_at) values(?,?,?,?,?)').run(nanoid(), e.id, asset.id, hashToken(token), Math.floor(Date.now() / 1000) + ttl); await event(req.userId, 'delivery_opened', e.product_id); res.json({ url: `/api/download/${token}`, expiresIn: ttl });
