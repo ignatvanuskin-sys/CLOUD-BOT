@@ -62,7 +62,7 @@ describe('Health and readiness endpoints', () => {
     beforeEach(async () => {
       vi.resetModules();
       setTestEnv();
-      const { db, migrate } = await import('../server/db');
+      const { migrate } = await import('../server/db');
       await migrate();
       app = (await import('../server/app')).createApp();
     });
@@ -95,7 +95,7 @@ describe('Health and readiness endpoints', () => {
       process.env.REDIS_URL = 'redis://127.0.0.1:1';
       process.env.REDIS_TLS = 'false';
       process.env.REDIS_KEY_PREFIX = 'cloud-bot:redis-test:';
-      const { db, migrate } = await import('../server/db');
+      const { migrate } = await import('../server/db');
       await migrate();
       app = (await import('../server/app')).createApp();
     });
@@ -131,7 +131,7 @@ describe('Health and readiness endpoints', () => {
       process.env.S3_ACCESS_KEY_ID = 'test';
       process.env.S3_SECRET_ACCESS_KEY = 'test';
       process.env.S3_FORCE_PATH_STYLE = 'true';
-      const { db, migrate } = await import('../server/db');
+      const { migrate } = await import('../server/db');
       await migrate();
       app = (await import('../server/app')).createApp();
     });
@@ -154,7 +154,7 @@ describe('Health and readiness endpoints', () => {
     beforeEach(async () => {
       vi.resetModules();
       setProductionEnv();
-      const { db, migrate } = await import('../server/db');
+      const { migrate } = await import('../server/db');
       try { await migrate(); } catch { /* expected: DB unreachable */ }
       app = (await import('../server/app')).createApp();
     });
@@ -182,7 +182,7 @@ describe('Health and readiness endpoints', () => {
     beforeEach(async () => {
       vi.resetModules();
       setProductionEnv({ BOT_TOKEN: 'TEST_TOKEN' });
-      const { db, migrate } = await import('../server/db');
+      const { migrate } = await import('../server/db');
       try { await migrate(); } catch { /* expected: DB unreachable in this test env */ }
       app = (await import('../server/app')).createApp();
     });

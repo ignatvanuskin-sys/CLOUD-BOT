@@ -10,7 +10,7 @@
     "preview": "vite preview --host 0.0.0.0",
     "server": "tsx --import ./server/telemetry-bootstrap.ts server/index.ts",
     "seed": "tsx server/seed.ts",
-    "test": "vitest run tests/core.test.ts tests/telegram.test.ts tests/sqlite-migration.test.ts tests/storage.test.ts tests/stars-payment.test.ts tests/readiness.test.ts tests/queue.test.ts",
+    "test": "vitest run tests/core.test.ts tests/telegram.test.ts tests/sqlite-migration.test.ts tests/storage.test.ts tests/stars-payment.test.ts tests/readiness.test.ts tests/queue.test.ts tests/staging-config.test.ts",
     "typecheck": "tsc -b --noEmit",
     "lint": "eslint .",
     "test:integration": "vitest run tests/integration.test.ts",
@@ -26,6 +26,7 @@
     "security:scan": "node scripts/security-scan.mjs",
     "deps:audit": "npm audit --audit-level=high",
     "smoke:load": "node scripts/smoke-load.mjs",
+    "staging:validate": "node scripts/validate-staging-config.mjs",
     "staging:smoke": "node scripts/staging-smoke.mjs"
   },
   "dependencies": {

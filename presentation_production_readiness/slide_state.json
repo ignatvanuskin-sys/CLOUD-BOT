@@ -1,0 +1,144 @@
+{
+  "project_info": {
+    "title": "Cloud Bot — Production Readiness",
+    "created": 1787054247.319,
+    "last_updated": 1787054903,
+    "total_slides": 12
+  },
+  "slides": [
+    {
+      "id": "cover",
+      "state": "edited",
+      "pageNum": 1
+    },
+    {
+      "id": "audit_scope",
+      "state": "edited",
+      "pageNum": 2
+    },
+    {
+      "id": "security_hardening",
+      "state": "edited",
+      "pageNum": 3
+    },
+    {
+      "id": "observability",
+      "state": "edited",
+      "pageNum": 4
+    },
+    {
+      "id": "performance",
+      "state": "edited",
+      "pageNum": 5
+    },
+    {
+      "id": "frontend_quality",
+      "state": "edited",
+      "pageNum": 6
+    },
+    {
+      "id": "validation",
+      "state": "edited",
+      "pageNum": 7
+    },
+    {
+      "id": "railway_status",
+      "state": "edited",
+      "pageNum": 8
+    },
+    {
+      "id": "staging_config",
+      "state": "edited",
+      "pageNum": 9
+    },
+    {
+      "id": "readiness_verdict",
+      "state": "edited",
+      "pageNum": 10
+    },
+    {
+      "id": "go_live_plan",
+      "state": "edited",
+      "pageNum": 11
+    },
+    {
+      "id": "closing",
+      "state": "edited",
+      "pageNum": 12
+    }
+  ],
+  "outline": [
+    {
+      "id": "cover",
+      "title": "Cloud Bot — Production Readiness",
+      "summary": "Переход от Release Candidate к Production Candidate: результаты аудита, исправлений и внешней staging-проверки.",
+      "image_plan": "Use a suitable image if needed"
+    },
+    {
+      "id": "audit_scope",
+      "title": "Цель аудита: снизить production-риск",
+      "summary": "Области проверки: безопасность, платежи, Telegram, производительность, UX, observability и deployment.",
+      "image_plan": "Use a suitable image if needed"
+    },
+    {
+      "id": "security_hardening",
+      "title": "Что было усилено в приложении",
+      "summary": "HttpOnly-сессии, CSRF, редактирование логов, карантин загрузок, signed URLs и Redis queue.",
+      "image_plan": "Use a suitable image if needed"
+    },
+    {
+      "id": "observability",
+      "title": "Production-архитектура стала наблюдаемой",
+      "summary": "OpenTelemetry, health endpoints, request IDs, структурированные логи и Railway healthcheck.",
+      "image_plan": "Use a suitable image if needed"
+    },
+    {
+      "id": "performance",
+      "title": "Производительность и масштабирование",
+      "summary": "Оптимизация каталога, S3 redirects, bundle budget и вынос долгих операций в фоновые очереди.",
+      "image_plan": "Use a suitable image if needed"
+    },
+    {
+      "id": "frontend_quality",
+      "title": "Frontend стал безопаснее и доступнее",
+      "summary": "Семантический поиск, URL-синхронизация, skip links, document titles и типизированный Telegram wrapper.",
+      "image_plan": "Use a suitable image if needed"
+    },
+    {
+      "id": "validation",
+      "title": "Автоматическая валидация: локальный результат",
+      "summary": "TypeScript, ESLint, integration tests, production build, bundle budget, security scan и npm audit.",
+      "image_plan": "Use a suitable image if needed"
+    },
+    {
+      "id": "railway_status",
+      "title": "Что показывает Railway staging gate",
+      "summary": "Последний push skipped из-за guarded variable; ручной запуск завершился Invalid RAILWAY_TOKEN.",
+      "image_plan": "Use a suitable image if needed"
+    },
+    {
+      "id": "staging_config",
+      "title": "Конфигурация staging: необходимые gates",
+      "summary": "Repository variables, environment secrets и Railway app variables без раскрытия значений.",
+      "image_plan": "Use a suitable image if needed"
+    },
+    {
+      "id": "readiness_verdict",
+      "title": "Production readiness verdict",
+      "summary": "Код готов к staging-прогону; внешний Railway gate не подтвержден, текущий статус — Production Candidate.",
+      "image_plan": "Use a suitable image if needed"
+    },
+    {
+      "id": "go_live_plan",
+      "title": "План выхода в production",
+      "summary": "Авторизация Railway, deploy/migrations/smoke tests, Telegram flows и раздельные production-ресурсы.",
+      "image_plan": "Use a suitable image if needed"
+    },
+    {
+      "id": "closing",
+      "title": "Итог",
+      "summary": "Cloud Bot стал наблюдаемой и значительно более защищённой production-кандидатной версией; остаётся внешний staging gate.",
+      "image_plan": "Use a suitable image if needed"
+    }
+  ]
+}

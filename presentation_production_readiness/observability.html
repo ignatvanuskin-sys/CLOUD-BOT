@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<style>
+*{box-sizing:border-box}
+body{margin:0}
+.slide-container{width:1280px;min-height:720px;background:#F4F5F7;color:#42526E;font-family:Arial,sans-serif;padding:54px 72px 0;border-top:2px solid #091E42}
+.kicker{font:600 14px monospace;color:#FF5630;letter-spacing:2px}
+.title{font:600 42px monospace;color:#091E42;margin:18px 0 28px}
+.pipeline{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid #091E42;border-bottom:1px solid #091E42}
+.stage{min-height:200px;padding:18px 16px 0;border-right:1px solid #091E42;position:relative}
+.stage:last-child{border-right:0}
+.stage:after{content:'→';position:absolute;right:-15px;top:90px;background:#F4F5F7;color:#FF5630;font:600 26px monospace;padding:0 4px}
+.stage:last-child:after{content:''}
+.num{font:600 30px monospace;color:#FF5630}
+.stage h2{font:600 20px monospace;color:#091E42;margin:22px 0 14px}
+.stage p{font-size:18px;line-height:1.42;margin:0;max-width:240px}
+.evidence{margin-top:20px;display:grid;grid-template-columns:5fr 7fr;gap:28px;align-items:start}
+.callout{border-top:8px solid #FF5630;padding-top:12px;color:#091E42;font:600 23px monospace;line-height:1.3}
+.list{border-left:1px solid #091E42;padding-left:20px;font-size:18px;line-height:1.55}
+.list b{color:#091E42;font-family:monospace}
+</style>
+</head>
+<body>
+<div class="slide-container">
+<div class="kicker">03 / OBSERVABILITY</div>
+<h1 class="title">Production-архитектура стала наблюдаемой</h1>
+<div class="pipeline">
+<div class="stage"><div class="num">01</div><h2>REQUEST</h2><p>Каждый запрос получает request ID для корреляции событий между слоями.</p></div>
+<div class="stage"><div class="num">02</div><h2>TELEMETRY</h2><p>OpenTelemetry собирает traces и metrics и экспортирует их через OTLP.</p></div>
+<div class="stage"><div class="num">03</div><h2>HEALTH</h2><p><b>/health/live</b>, <b>/health/ready</b> и защищённые metrics дают явные сигналы состояния.</p></div>
+<div class="stage"><div class="num">04</div><h2>GATE</h2><p>Railway healthcheck использует readiness endpoint до подачи трафика.</p></div>
+</div>
+<div class="evidence"><div class="callout">Система сигнализирует не только о сбое, но и о его контексте.</div><div class="list"><div><b>Логи:</b> структурированные события без токенов и секретов.</div><div><b>Сервис:</b> отдельный OTEL service name для окружения.</div><div><b>Deploy:</b> Docker manifest задаёт healthcheck timeout и restart policy.</div></div></div>
+</div>
+</body>
+</html>

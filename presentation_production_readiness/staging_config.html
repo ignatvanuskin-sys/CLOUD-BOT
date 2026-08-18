@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<style>
+*{box-sizing:border-box}
+html,body{margin:0}
+.slide-container{width:1280px;min-height:720px;background:#F4F5F7;color:#42526E;font-family:Arial,sans-serif;border-top:2px solid #091E42}
+.frame{padding:50px 72px 0}
+.kicker{font:600 14px monospace;letter-spacing:2px;color:#FF5630;text-transform:uppercase}
+.title{font:600 42px monospace;line-height:1.1;color:#091E42;margin:18px 0 24px}
+.layers{display:grid;grid-template-columns:1fr 1fr 1fr;border-top:1px solid #091E42;border-left:1px solid #091E42}
+.layer{min-height:240px;padding:12px 16px 0;border-right:1px solid #091E42;border-bottom:1px solid #091E42}
+.layer-no{font:600 30px monospace;color:#FF5630}
+.layer h2{font:600 19px monospace;color:#091E42;line-height:1.15;margin:14px 0 16px}
+.layer p{font-size:17px;line-height:1.4;margin:0 0 14px}
+.vars{font:600 15px monospace;line-height:1.4;color:#091E42}
+.vars span{display:block}
+.vars .secret{color:#FF5630}
+.note{margin-top:16px;border-top:6px solid #FF5630;padding-top:10px;display:grid;grid-template-columns:3fr 7fr;gap:18px;align-items:start}
+.note strong{font:600 18px monospace;color:#091E42}
+.note span{font-size:17px;line-height:1.4}
+</style>
+</head>
+<body>
+<div class="slide-container">
+<div class="frame">
+<div class="kicker">08 / STAGING CONFIGURATION</div>
+<h1 class="title">Конфигурация staging: необходимые gates</h1>
+<div class="layers">
+<section class="layer">
+<div class="layer-no">01</div>
+<h2>REPOSITORY VARIABLES</h2>
+<p>Включают deployment gate и идентификаторы Railway-ресурсов.</p>
+<div class="vars"><span>RAILWAY_STAGING_ENABLED</span><span>RAILWAY_PROJECT_ID</span><span>RAILWAY_ENVIRONMENT_ID</span><span>RAILWAY_SERVICE_ID</span><span>STAGING_BASE_URL</span></div>
+</section>
+<section class="layer">
+<div class="layer-no">02</div>
+<h2>ENVIRONMENT SECRETS</h2>
+<p>Используются GitHub Actions и не должны попадать в код, логи или evidence.</p>
+<div class="vars"><span class="secret">RAILWAY_TOKEN</span><span class="secret">STAGING_DATABASE_URL</span><span class="secret">STAGING_METRICS_TOKEN</span><span>environment: railway-staging</span></div>
+</section>
+<section class="layer">
+<div class="layer-no">03</div>
+<h2>RAILWAY APP VARIABLES</h2>
+<p>Формируют runtime приложения и его внешние интеграции.</p>
+<div class="vars"><span>NODE_ENV · PORT</span><span>WEBAPP_URL · CORS_ORIGIN</span><span>BOT_TOKEN · WEBHOOK_SECRET</span><span>Postgres · Redis · S3/R2</span><span>OTLP · metrics · session TTL</span></div>
+</section>
+</div>
+<div class="note"><strong>SECURITY RULE</strong><span>Секреты хранятся только в Railway Variables / GitHub Secrets. В отчёты и operational evidence попадают только статусы, timestamps и безопасные идентификаторы запусков.</span></div>
+</div>
+</div>
+</body>
+</html>

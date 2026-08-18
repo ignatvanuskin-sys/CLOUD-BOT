@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<style>
+*{box-sizing:border-box}
+.slide-container{width:1280px;min-height:720px;background:#F4F5F7;color:#42526E;font-family:Arial,sans-serif;padding:54px 72px 0;border-top:2px solid #091E42}
+.kicker{font:600 14px monospace;color:#FF5630;letter-spacing:2px}
+.title{font:600 42px monospace;color:#091E42;margin:18px 0 34px}
+.layout{display:grid;grid-template-columns:4fr 8fr;gap:36px}
+.verdict{border-top:8px solid #FF5630;padding-top:18px}
+.verdict b{display:block;font:600 30px monospace;color:#091E42;line-height:1.15}
+.verdict p{font-size:20px;line-height:1.42;margin-top:16px;max-width:330px}
+.signal{margin-top:22px;background:#091E42;color:#fff;padding:18px 20px;font:600 20px monospace;letter-spacing:1px}
+.checks{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid #091E42;border-left:1px solid #091E42}
+.check{min-height:124px;padding:12px 18px;border-right:1px solid #091E42;border-bottom:1px solid #091E42}
+.check b{display:block;color:#091E42;font:600 18px monospace}
+.check span{display:block;margin-top:10px;font-size:16px;line-height:1.35}
+.pass{color:#FF5630;font:600 15px monospace;letter-spacing:1px;margin-bottom:10px}
+.budget{margin-top:6px;border-top:8px solid #FF5630;padding-top:12px;display:grid;grid-template-columns:3fr 9fr;gap:20px;align-items:start}
+.budget strong{font:600 24px monospace;color:#091E42}
+.track{height:24px;border:1px solid #091E42;background:#fff;margin-top:3px;position:relative}
+.fill{height:22px;width:81%;background:#FF5630}
+.caption{font-size:15px;margin-top:8px}
+</style>
+</head>
+<body>
+<div class="slide-container">
+<div class="kicker">06 / VALIDATION</div>
+<h1 class="title">Автоматическая валидация: локальный результат</h1>
+<div class="layout">
+<section class="verdict"><b>Проверки<br>проходят.</b><p>После финальных TypeScript-правок production build и полный CI-набор завершились успешно.</p><div class="signal">STATUS: PASS</div></section>
+<section class="checks">
+<div class="check"><div class="pass">PASS</div><b>TYPECHECK</b><span>TypeScript project build без ошибок.</span></div>
+<div class="check"><div class="pass">PASS</div><b>ESLINT</b><span>0 ошибок и 0 предупреждений.</span></div>
+<div class="check"><div class="pass">2 / 2</div><b>INTEGRATION</b><span>Health endpoints, cookie session и logout contract.</span></div>
+<div class="check"><div class="pass">12 / 12</div><b>PRODUCTION FIXES</b><span>Logging, storage и PostgreSQL migrations.</span></div>
+<div class="check"><div class="pass">PASS</div><b>BUILD</b><span>Vite production bundle собран успешно.</span></div>
+<div class="check"><div class="pass">0 HIGH+</div><b>SECURITY</b><span>Secret scan OK; npm audit high+ без уязвимостей.</span></div>
+</section>
+</div>
+<div class="budget"><strong>BUNDLE BUDGET</strong><div><div class="track"><div class="fill"></div></div><div class="caption">580 315 B фактически · лимит 716 800 B · 81% бюджета</div></div></div>
+</div>
+</body>
+</html>

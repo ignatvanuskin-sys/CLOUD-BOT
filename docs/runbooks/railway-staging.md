@@ -75,7 +75,7 @@ npm run db:migrate
 npm run db:status
 ```
 
-For GitHub automation, set repository variable `RAILWAY_STAGING_ENABLED=true`, variables `RAILWAY_PROJECT_ID`, `RAILWAY_ENVIRONMENT_ID`, `RAILWAY_SERVICE_ID`, `STAGING_BASE_URL`, and environment secrets `RAILWAY_TOKEN`, `STAGING_DATABASE_URL`, `STAGING_METRICS_TOKEN`. The guarded `.github/workflows/staging.yml` deploys with the pinned Railway CLI, applies immutable migrations, checks schema status, and runs HTTPS health/metrics smoke tests.
+For GitHub automation, set repository variable `RAILWAY_STAGING_ENABLED=true`, variables `RAILWAY_PROJECT_ID`, `RAILWAY_ENVIRONMENT_ID`, `RAILWAY_SERVICE_ID`, `STAGING_BASE_URL`, and environment secrets `RAILWAY_TOKEN`, `STAGING_DATABASE_URL`, `STAGING_METRICS_TOKEN`. The guarded `.github/workflows/staging.yml` first runs `npm run staging:validate`, which checks presence of all required inputs and requires an HTTPS `STAGING_BASE_URL` without printing secret values. Only after this preflight does it install dependencies, build, deploy with the pinned Railway CLI, apply immutable migrations, check schema status, and run HTTPS health/metrics smoke tests. If credentials are absent, the workflow fails early with actionable variable names instead of reaching the Railway deploy step with an ambiguous authentication error.
 
 7. Check:
 

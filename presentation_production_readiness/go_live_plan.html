@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<style>
+*{box-sizing:border-box}
+body{margin:0}
+.slide-container{width:1280px;min-height:720px;background:#F4F5F7;color:#42526E;font-family:Arial,sans-serif;padding:54px 72px 0;border-top:2px solid #091E42}
+.kicker{font:600 14px monospace;letter-spacing:2px;color:#FF5630;text-transform:uppercase}
+.title{font:600 42px monospace;line-height:1.1;color:#091E42;margin:18px 0 16px}
+.lead{font-size:22px;line-height:1.35;max-width:900px;margin:0 0 20px;color:#091E42}
+.steps{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid #091E42;border-left:1px solid #091E42}
+.step{min-height:220px;padding:12px 12px 0;border-right:1px solid #091E42;border-bottom:1px solid #091E42}
+.num{font:600 36px monospace;color:#FF5630}
+.step h2{font:600 20px monospace;line-height:1.15;color:#091E42;margin:18px 0 12px}
+.step p{font-size:17px;line-height:1.42;margin:0}
+.step .check{display:block;margin-top:12px;border-top:1px solid #091E42;padding-top:6px;font:600 14px monospace;color:#091E42;letter-spacing:.5px}
+.rule{margin-top:20px;border-top:8px solid #FF5630;padding-top:12px;display:grid;grid-template-columns:3fr 9fr;gap:18px;align-items:start}
+.rule strong{font:600 22px monospace;color:#091E42}
+.rule span{font-size:19px;line-height:1.4}
+</style>
+</head>
+<body>
+<div class="slide-container">
+<div class="kicker">10 / GO-LIVE</div>
+<h1 class="title">План выхода в production</h1>
+<p class="lead">Railway deployment считается подтверждённым только после прохождения всей цепочки — от credentials до Telegram smoke tests.</p>
+<div class="steps">
+<section class="step"><div class="num">01</div><h2>ОТКРЫТЬ GATE</h2><p>Авторизовать Railway CLI или обновить GitHub environment secrets и repository variables: token, project, environment, service и staging URL.</p><span class="check">PRECONDITION: no secret in logs</span></section>
+<section class="step"><div class="num">02</div><h2>DEPLOY + DATA</h2><p>Запустить Docker deploy, затем применить immutable migrations и проверить schema status на staging PostgreSQL.</p><span class="check">CHECK: /health/ready</span></section>
+<section class="step"><div class="num">03</div><h2>SMOKE FLOWS</h2><p>Проверить HTTPS health/metrics, Telegram webhook, Mini App deep link, Stars payment, entitlement, duplicate update и refund flow.</p><span class="check">EVIDENCE: request IDs only</span></section>
+<section class="step"><div class="num">04</div><h2>SEPARATE PROD</h2><p>После staging sign-off создать отдельные production bot, database, Redis namespace и private S3/R2 bucket.</p><span class="check">GO: staging verified</span></section>
+</div>
+<div class="rule"><strong>NO-GO RULE</strong><span>Не переводить проект в production, пока ручной Railway run не завершится успешно и не подтверждены migrations, schema, health endpoints и Telegram critical paths.</span></div>
+</div>
+</body>
+</html>

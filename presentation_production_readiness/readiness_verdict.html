@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<style>
+*{box-sizing:border-box}
+html,body{margin:0} /* remove default body margin to avoid extra page height */
+.slide-container{width:1280px;min-height:720px;background:#F4F5F7;color:#42526E;font-family:Arial,sans-serif;padding:54px 72px 0;border-top:2px solid #091E42;margin-top:-1px}
+.kicker{font:600 14px monospace;color:#FF5630;letter-spacing:2px;text-transform:uppercase}
+.title{font:600 42px monospace;color:#091E42;margin:18px 0 38px}
+.layout{display:grid;grid-template-columns:5fr 7fr;gap:44px;align-items:start}
+.verdict{border-top:10px solid #FF5630;padding-top:22px}
+.verdict-label{font:600 15px monospace;letter-spacing:1px;color:#42526E}
+.verdict h2{font:600 45px monospace;line-height:1.06;color:#091E42;margin:24px 0 20px}
+.verdict p{font-size:21px;line-height:1.45;max-width:420px;margin:0}
+.commit{margin-top:30px;padding-top:16px;border-top:1px solid #091E42;font:600 16px monospace;color:#091E42}
+.matrix{border-top:1px solid #091E42;border-left:1px solid #091E42}
+.row{display:grid;grid-template-columns:2fr 5fr;min-height:86px;border-right:1px solid #091E42;border-bottom:1px solid #091E42}
+.row strong{padding:19px 16px;font:600 16px monospace;color:#091E42}
+.row span{padding:19px 16px;font-size:18px;line-height:1.35}
+.pass{color:#091E42;font-weight:700}
+.pending{color:#FF5630;font-weight:700}
+.decision{margin-top:34px;background:#091E42;color:#fff;padding:20px 24px;display:grid;grid-template-columns:3fr 9fr;gap:28px;align-items:center}
+.decision b{font:600 19px monospace;letter-spacing:1px;color:#FF5630}
+.decision span{font-size:19px;line-height:1.35}
+</style>
+</head>
+<body>
+<div class="slide-container">
+<div class="kicker">08 / READINESS VERDICT</div>
+<h1 class="title">Production readiness verdict</h1>
+<div class="layout">
+<section class="verdict">
+<div class="verdict-label">RECOMMENDED STATUS</div>
+<h2>PRODUCTION<br>CANDIDATE</h2>
+<p>Кодовая база и локальная CI-валидация готовы к следующему staging-прогону. Финальное production-решение зависит от внешнего Railway gate.</p>
+<div class="commit">VALIDATED COMMIT<br>1ff8a7a · main · 18 AUG 2026</div>
+</section>
+<section class="matrix">
+<div class="row"><strong>CODE</strong><span><span class="pass">PASS</span> TypeScript, production build и ESLint без ошибок.</span></div>
+<div class="row"><strong>SECURITY</strong><span><span class="pass">PASS</span> Secret scan OK; npm audit high+ — 0 vulnerabilities.</span></div>
+<div class="row"><strong>PERFORMANCE</strong><span><span class="pass">PASS</span> Bundle budget 580 315 B при лимите 716 800 B; queue и S3 offload включены.</span></div>
+<div class="row"><strong>STAGING</strong><span><span class="pending">PENDING</span> Railway credentials, variables, migrations и HTTPS smoke tests ещё не подтверждены.</span></div>
+</section>
+</div>
+<div class="decision"><b>DECISION GATE</b><span>Не публиковать production до успешного deploy → migrations → schema status → health/metrics smoke tests в Railway staging.</span></div>
+</div>
+</body>
+</html>

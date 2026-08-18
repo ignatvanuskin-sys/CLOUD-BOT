@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<style>
+*{box-sizing:border-box}
+body{margin:0}
+.slide-container{width:1280px;min-height:720px;background:#F4F5F7;color:#42526E;font-family:Arial,sans-serif;padding:54px 72px 0;border-top:2px solid #091E42}
+.kicker{font:600 14px monospace;color:#FF5630;letter-spacing:2px;text-transform:uppercase}
+.title{font:600 42px monospace;color:#091E42;margin:18px 0 20px}
+.intro{display:grid;grid-template-columns:7fr 5fr;gap:20px;align-items:end;margin-bottom:18px}
+.lead{font-size:25px;line-height:1.28;color:#091E42;max-width:690px;margin:0}
+.note{font:16px monospace;line-height:1.45;border-top:8px solid #FF5630;padding-top:10px;margin:0}
+.metrics{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid #091E42;border-left:1px solid #091E42}
+.metric{min-height:180px;padding:16px 12px 0;border-right:1px solid #091E42;border-bottom:1px solid #091E42}
+.index{font:600 28px monospace;color:#FF5630}
+.metric h2{font:600 20px monospace;color:#091E42;margin:14px 0 10px;line-height:1.1}
+.metric p{font-size:17px;line-height:1.38;margin:0}
+.value{display:block;margin-top:16px;font:600 22px monospace;color:#091E42}
+.footer{margin-top:16px;border-top:1px solid #091E42;padding-top:12px;font:600 18px monospace;color:#091E42}
+</style>
+</head>
+<body>
+<div class="slide-container">
+<div class="kicker">04 / PERFORMANCE</div>
+<h1 class="title">Производительность и масштабирование</h1>
+<div class="intro"><p class="lead">Оптимизации уменьшают нагрузку на Node.js и переводят долгие операции из request path в управляемую инфраструктуру.</p><p class="note">Фокус аудита: меньше синхронной работы, меньше лишнего трафика, воспроизводимый budget.</p></div>
+<div class="metrics">
+<section class="metric"><div class="index">01</div><h2>CATALOG QUERY</h2><p>Цены предварительно агрегируются; добавлены индексы для сортировки и выдачи каталога.</p><span class="value">DB-first</span></section>
+<section class="metric"><div class="index">02</div><h2>S3 REDIRECTS</h2><p>Скачивание передаётся клиенту через signed URL, а Node.js worker не проксирует содержимое.</p><span class="value">offload</span></section>
+<section class="metric"><div class="index">03</div><h2>BUNDLE BUDGET</h2><p>Финальная сборка контролируется автоматическим лимитом размера JavaScript.</p><span class="value">580 315 / 716 800 B</span></section>
+<section class="metric"><div class="index">04</div><h2>BACKGROUND QUEUE</h2><p>Asset scanning выполняется через durable Redis-backed queue с ограничением конкуренции.</p><span class="value">async jobs</span></section>
+</div>
+<div class="footer">Результат: performance guardrails встроены в CI, а масштабирование не зависит от синхронной обработки загрузок.</div>
+</div>
+</body>
+</html>

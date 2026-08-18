@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<style>
+*{box-sizing:border-box}
+body{margin:0}
+.slide-container{width:1280px;min-height:720px;background:#F4F5F7;color:#42526E;font-family:Arial,sans-serif;padding:50px 72px 0;border-top:2px solid #091E42}
+.kicker{font:600 14px monospace;letter-spacing:2px;color:#FF5630;text-transform:uppercase}
+.title{font:600 42px monospace;line-height:1.1;color:#091E42;margin:18px 0 42px}
+.pipeline{display:grid;grid-template-columns:1fr 1fr 1fr;border-top:1px solid #091E42;border-bottom:1px solid #091E42}
+.step{min-height:200px;padding:20px 18px 0;border-right:1px solid #091E42}
+.step:last-child{border-right:0}
+.step-no{font:600 34px monospace;color:#FF5630}
+.status{display:inline-block;margin-top:14px;padding:8px 12px;background:#091E42;color:#fff;font:600 14px monospace;letter-spacing:1px}
+.status.warn{background:#FF5630}
+.step h2{font:600 22px monospace;color:#091E42;margin:18px 0 10px}
+.step p{font-size:18px;line-height:1.4;margin:0}
+.evidence{display:grid;grid-template-columns:2fr 2fr 3fr;margin-top:20px;border-top:8px solid #FF5630;padding-top:12px;gap:18px}
+.evidence b{display:block;font:600 14px monospace;color:#091E42;letter-spacing:1px}
+.evidence span{display:block;margin-top:8px;font-size:17px;line-height:1.35}
+.conclusion{margin-top:18px;color:#091E42;font:600 22px monospace}
+</style>
+</head>
+<body>
+<div class="slide-container">
+<div class="kicker">07 / RAILWAY EXTERNAL GATE</div>
+<h1 class="title">Что показывает Railway staging gate</h1>
+<div class="pipeline">
+<section class="step"><div class="step-no">01</div><div class="status">SKIPPED</div><h2>Push на main</h2><p>Коммит <b>1ff8a7a</b> запустил workflow 18 августа. Job корректно пропущена, потому что guarded gate требует явного <b>RAILWAY_STAGING_ENABLED=true</b>.</p></section>
+<section class="step"><div class="step-no">02</div><div class="status warn">FAILED</div><h2>Ручной запуск</h2><p>Последняя попытка 16 августа остановилась на deploy step с сообщением: <b>Invalid RAILWAY_TOKEN</b>.</p></section>
+<section class="step"><div class="step-no">03</div><div class="status warn">PENDING</div><h2>Текущий доступ</h2><p>Railway CLI в текущей сессии не авторизован. Фактическое состояние сервиса и значения переменных нельзя подтвердить без credentials.</p></section>
+</div>
+<div class="evidence"><div><b>GITHUB ACTIONS</b><span>Run 32133368774 · completed / skipped</span></div><div><b>MANUAL RUN</b><span>Run 31934582365 · completed / failure</span></div><div><b>SAFE HANDOFF</b><span>Секреты не выводятся и не включаются в evidence.</span></div></div>
+<div class="conclusion">Вывод: код готов к staging-прогону; внешний deployment gate ещё не подтверждён.</div>
+</div>
+</body>
+</html>

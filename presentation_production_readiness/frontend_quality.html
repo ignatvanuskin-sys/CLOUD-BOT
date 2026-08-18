@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<style>
+*{box-sizing:border-box}
+body{margin:0}
+.slide-container{width:1280px;min-height:720px;margin-top:-1px;background:#F4F5F7;color:#42526E;font-family:Arial,sans-serif;padding:54px 72px 0;border-top:2px solid #091E42}
+.kicker{font:600 14px monospace;letter-spacing:2px;color:#FF5630}
+.title{font:600 42px monospace;line-height:1.12;color:#091E42;margin:18px 0 28px}
+.flow{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid #091E42;border-left:1px solid #091E42}
+.step{min-height:230px;padding:16px 16px;border-right:1px solid #091E42;border-bottom:1px solid #091E42}
+.index{font:600 30px monospace;color:#FF5630}
+.step b{display:block;margin-top:18px;font:600 21px monospace;line-height:1.15;color:#091E42}
+.step p{font-size:18px;line-height:1.42;margin:12px 0 0}
+.technical{margin-top:24px;display:grid;grid-template-columns:2fr 3fr;gap:18px;align-items:start;border-top:8px solid #FF5630;padding-top:12px}
+.technical strong{font:600 20px monospace;color:#091E42}
+.technical span{font-size:18px;line-height:1.4}
+</style>
+</head>
+<body>
+<div class="slide-container">
+<div class="kicker">05 / FRONTEND QUALITY</div>
+<h1 class="title">Frontend стал безопаснее и доступнее</h1>
+<div class="flow">
+<div class="step"><div class="index">01</div><b>Семантический поиск</b><p>Форма поиска получила корректные labels, понятные состояния загрузки и ошибок, а запрос синхронизируется с URL.</p></div>
+<div class="step"><div class="index">02</div><b>Предсказуемая навигация</b><p>Добавлены skip links и route-aware document titles, чтобы клавиатурная навигация и история браузера оставались понятными.</p></div>
+<div class="step"><div class="index">03</div><b>Безопасные ошибки</b><p>Error UI показывает безопасный retry-сценарий без внутренних деталей и поддерживает role alert / live status для assistive technology.</p></div>
+<div class="step"><div class="index">04</div><b>Типизированный Telegram API</b><p>Wrapper покрывает MainButton, SecondaryButton, openLink, haptics и профильные поля без неявных any-сценариев.</p></div>
+</div>
+<div class="technical"><strong>UX PRINCIPLE</strong><span>Каждое критичное действие имеет понятное состояние, клавиатурный путь и безопасный fallback вне Telegram WebApp.</span></div>
+</div>
+</body>
+</html>

@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<style>
+*{box-sizing:border-box}
+body{margin:0}
+.slide-container{width:1280px;min-height:720px;background:#F4F5F7;color:#42526E;font-family:Arial,sans-serif;border-top:6px solid #091E42}
+.frame{padding:54px 60px 0}
+.kicker{font:600 14px monospace;letter-spacing:2px;color:#FF5630;text-transform:uppercase}
+.title{font:600 54px monospace;line-height:1.08;color:#091E42;margin:22px 0 24px}
+.lead{font-size:27px;line-height:1.35;color:#091E42;max-width:900px;margin:0}
+.statuses{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:24px}
+.status{min-height:140px;border-top:1px solid #091E42;border-bottom:1px solid #091E42;padding:14px 12px 0}
+.status h2{font:600 22px monospace;color:#091E42;margin:0 0 14px}
+.status p{font-size:20px;line-height:1.45;margin:0;max-width:440px}
+.status.confirmed{border-top:8px solid #091E42}
+.status.pending{border-top:8px solid #FF5630}
+.status.pending h2{color:#FF5630}
+.marker{display:block;font:600 15px monospace;letter-spacing:1px;margin-bottom:12px;color:#42526E}
+.footer{margin-top:16px;border-top:1px solid #091E42;padding-top:8px;display:grid;grid-template-columns:2fr 5fr 5fr;gap:12px;align-items:start}
+.footer b{font:600 14px monospace;color:#091E42;letter-spacing:1px}
+.footer span{font:16px monospace;color:#42526E}
+.footer .accent{color:#FF5630;font-weight:600}
+</style>
+</head>
+<body>
+<div class="slide-container">
+<div class="frame">
+<div class="kicker">11 / FINAL HANDOFF</div>
+<h1 class="title">Итог</h1>
+<p class="lead">Cloud Bot стал наблюдаемой и значительно более защищённой production-кандидатной версией.</p>
+<div class="statuses">
+<section class="status confirmed"><span class="marker">CONFIRMED LOCALLY</span><h2>КОД И CI — PASS</h2><p>TypeScript, production build, integration tests, security scan, dependency audit и bundle budget проходят успешно.</p></section>
+<section class="status pending"><span class="marker">EXTERNAL GATE</span><h2>RAILWAY STAGING — PENDING</h2><p>Остаётся подтвердить credentials, переменные окружения, deploy, migrations, health/metrics smoke tests и Telegram critical paths.</p></section>
+</div>
+<div class="footer"><b>COMMIT</b><span class="accent">1ff8a7a · main</span><span>Следующий шаг: корректно настроить Railway/GitHub secrets и повторить staging gate.</span></div>
+</div>
+</div>
+</body>
+</html>
