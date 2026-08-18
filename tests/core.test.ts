@@ -55,7 +55,7 @@ describe('api hardening smoke', () => {
   beforeEach(async () => {
     process.env.NODE_ENV = 'test'; process.env.ALLOW_DEV_LOGIN = 'true'; process.env.DB_DRIVER = 'sqlite'; process.env.STORAGE_DRIVER = 'local'; process.env.DATABASE_PATH = './data/test.sqlite'; process.env.WEBHOOK_SECRET = 'test-secret-token-123';
     const { db, migrate } = await import('../server/db'); await migrate(); await await db.exec('delete from webhook_updates; delete from delivery_events; delete from entitlements; delete from orders; delete from product_assets; delete from license_plans; delete from products; delete from users; delete from admin_users;');
-    await db.prepare('insert into products(id,slug,type,category,title,result,version,status) values(?,?,?,?,?,?,?,?)').run('p1','p1','template','ai','P1','R','1.0.0','published');
+    await db.prepare('insert into products(id,slug,type,category,title,result,version,status) values(?,?,?,?,?,?,?,?)').run('p1','p1','ready_bot','ai','P1','R','1.0.0','published');
     await db.prepare('insert into license_plans(id,product_id,name,price_xtr,projects,commercial,support_days,updates_days) values(?,?,?,?,?,?,?,?)').run('l1','p1','PRO',100,1,1,30,90);
     await db.prepare('insert into license_plans(id,product_id,name,price_xtr,projects,commercial,support_days,updates_days) values(?,?,?,?,?,?,?,?)').run('l2','p1','TEAM',200,5,1,30,90);
     await db.prepare('insert into product_assets(id,product_id,version,storage_key,file_name,mime_type,size_bytes,checksum_sha256,status) values(?,?,?,?,?,?,?,?,?)').run('a1','p1','1.0.0','products/p1/1.0.0/a1.zip','source.zip','application/zip',1024,'abc','approved');
@@ -111,6 +111,7 @@ describe('api hardening smoke', () => {
     expect(output).not.toContain(capability);
     expect(output).toContain('/api/download/[redacted]');
   });
+  it('does not expose legacy template products in the public catalog', async () => { const { db } = await import('../server/db'); await db.prepare('insert into products(id,slug,type,category,title,result,version,status) values(?,?,?,?,?,?,?,?)').run('legacy-template', 'legacy-template', 'template', 'ai', 'Legacy Template', 'Hidden', '1.0.0', 'published'); const { createApp } = await import('../server/app'); const app = createApp(); const catalog = await request(app).get('/api/products').expect(200); expect(catalog.body.items.map((item: any) => item.id)).not.toContain('legacy-template'); await request(app).get('/api/products/legacy-template').expect(404); });
   it('bootstraps configured admins idempotently', async () => { const { bootstrapAdmins, db } = await import('../server/db'); await bootstrapAdmins('123, 123,invalid,456'); await bootstrapAdmins('123,456'); expect(((await db.prepare('select count(*) n from admin_users').get()) as any).n).toBe(2); });
   it('health endpoints do not expose secrets', async () => { const { createApp } = await import('../server/app'); const res = await request(createApp()).get('/health/ready').expect(200); expect(JSON.stringify(res.body)).not.toContain('test-secret'); expect(res.body).not.toHaveProperty('telegramError'); });
 });

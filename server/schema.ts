@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import { z } from 'zod';
 
-export type ProductType = 'template' | 'ready_bot' | 'module' | 'service';
+export type ProductType = 'ready_bot' | 'module' | 'service';
 export type StartParamResult =
   | { kind: 'catalog' }
   | { kind: 'product'; id: string }

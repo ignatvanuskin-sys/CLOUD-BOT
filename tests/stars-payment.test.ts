@@ -99,7 +99,7 @@ describe('Telegram Stars payment lifecycle', () => {
     await migrate();
     await db.exec('delete from webhook_updates; delete from delivery_events; delete from entitlements; delete from orders; delete from product_assets; delete from license_plans; delete from products; delete from users; delete from admin_users;');
     await bootstrapAdmins(ADMIN_IDS);
-    await db.prepare('insert into products(id,slug,type,category,title,result,version,status) values(?,?,?,?,?,?,?,?)').run('p1', 'p1', 'template', 'ai', 'Test Product', 'Test Result', '1.0.0', 'published');
+    await db.prepare('insert into products(id,slug,type,category,title,result,version,status) values(?,?,?,?,?,?,?,?)').run('p1', 'p1', 'ready_bot', 'ai', 'Test Product', 'Test Result', '1.0.0', 'published');
         await db.prepare('insert into license_plans(id,product_id,name,price_xtr,projects,commercial,support_days,updates_days) values(?,?,?,?,?,?,?,?)').run('l1', 'p1', 'PRO', 100, 1, 1, 30, 90);
     await db.prepare('insert into product_assets(id,product_id,version,storage_key,file_name,mime_type,size_bytes,checksum_sha256,status) values(?,?,?,?,?,?,?,?,?)').run('a1', 'p1', '1.0.0', 'products/p1/1.0.0/a1.txt', 'demo.txt', 'text/plain', 100, 'abc', 'published');
 
