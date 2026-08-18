@@ -2,9 +2,9 @@ import 'dotenv/config';
 import { bootstrapAdmins, db, migrate } from './db';
 import { ensureDemoAsset } from './storage';
 
-export async function seedDevelopmentFixtures() {
+export async function seedDevelopmentFixtures(options: { migrateFirst?: boolean } = {}) {
   if (process.env.NODE_ENV === 'production') throw new Error('Seed is disabled in production');
-  await migrate();
+  if (options.migrateFirst !== false) await migrate();
 
   // Development-only catalog fixtures. No template products are seeded or exposed.
   const items = [
@@ -33,5 +33,5 @@ export async function seedDevelopmentFixtures() {
 }
 
 if (process.argv[1]?.endsWith('seed.ts')) {
-  await seedDevelopmentFixtures();
+  await seedDevelopmentFixtures({ migrateFirst: true });
 }

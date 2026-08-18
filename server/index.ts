@@ -13,7 +13,7 @@ let shuttingDown = false;
 async function start() {
   const startedAt = Date.now();
   await migrate();
-  if (!config.isProduction && config.NODE_ENV === 'development' && process.env.SEED_DEV_DATA !== 'false') await seedDevelopmentFixtures();
+  if (!config.isProduction && config.NODE_ENV === 'development' && process.env.SEED_DEV_DATA !== 'false') await seedDevelopmentFixtures({ migrateFirst: false });
   else await bootstrapAdmins();
   console.log(JSON.stringify({ ts: new Date().toISOString(), level: 'info', event: 'database_migrations_ready', durationMs: Date.now() - startedAt }));
   const server = createServer(createApp());
