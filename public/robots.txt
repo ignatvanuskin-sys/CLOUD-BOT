@@ -1,0 +1,9 @@
+User-agent: *
+Disallow: /api/
+Disallow: /profile
+Disallow: /settings
+Disallow: /notifications
+Disallow: /history
+Disallow: /payments
+Disallow: /subscription
+Sitemap: /sitemap.xml
