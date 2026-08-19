@@ -1,13 +1,21 @@
 import { api } from './client';
-import type { AuthResponse, LicensePlan, Order, Product, ProductDetail, ProductFilters, Purchase, User } from '../types/api';
+import type { AuthResponse, FavoriteProduct, LicensePlan, Order, Product, ProductDetail, ProductFilters, Purchase, User, UserOrder } from '../types/api';
 export const authTelegram=(initData:string)=>api<AuthResponse>('/auth/telegram',{method:'POST',body:JSON.stringify({initData,devTelegramId:import.meta.env.DEV?'777':undefined})});
 export const getMe=()=>api<{user:User}>('/me');
+export const getAccess=()=>api<{role:'owner'|'editor'|'support'|null;canCreateProjects:boolean;canPublishProjects:boolean}>('/me/access');
 export const getProducts=(filters:ProductFilters={},signal?:AbortSignal)=>api<{items:Product[];limit:number;offset:number}>(`/products?${new URLSearchParams(Object.entries(filters).filter(([,v])=>v!==undefined&&v!=='').map(([k,v])=>[k,String(v)]))}`,{signal});
 export const getProduct=(slug:string,signal?:AbortSignal)=>api<ProductDetail>(`/products/${encodeURIComponent(slug)}`,{signal});
 export const getPurchases=()=>api<{items:Purchase[]}>('/me/purchases');
+export const getOrders=()=>api<{items:UserOrder[]}>('/me/orders');
+export const getFavorites=()=>api<{items:FavoriteProduct[]}>('/me/favorites');
+export const addFavorite=(productId:string)=>api<{ok:boolean;idempotent?:boolean}>('/me/favorites',{method:'POST',body:JSON.stringify({productId})});
+export const removeFavorite=(productId:string)=>api<{ok:boolean}>(`/me/favorites/${encodeURIComponent(productId)}`,{method:'DELETE'});
 export const createOrder=(licenseId:string,idempotencyKey:string)=>api<{order:Order;idempotent:boolean}>('/orders',{method:'POST',headers:{'Idempotency-Key':idempotencyKey},body:JSON.stringify({licenseId,idempotencyKey})});
 export const getOrder=(orderId:string)=>api<{order:Order&{created_at:string}}>(`/orders/${orderId}`);
 export const createInvoice=(orderId:string)=>api<{invoiceLink:string}>(`/orders/${orderId}/invoice`,{method:'POST'});
 export const createDownload=(purchaseId:string)=>api<{url:string;expiresIn:number}>(`/purchases/${purchaseId}/download`,{method:'POST'});
 export const logout=()=>api<{ok:true}>('/auth/logout',{method:'POST'});
+export const createProject=(input:{title:string;slug?:string;type:'template'|'ready_bot'|'module'|'service';category:string;result:string;description?:string;stack?:string;demo_url?:string;preview?:string;version?:string;changelog?:string})=>api<{id:string;status:'draft'}>('/admin/products',{method:'POST',body:JSON.stringify(input)});
+export async function uploadProjectAsset(productId:string,version:string,file:File){const body=new FormData();body.append('productId',productId);body.append('version',version);body.append('file',file);return api<{id:string;status:string;findings:string[]}>('/admin/assets/upload',{method:'POST',body});}
+export const publishProjectAsset=(assetId:string)=>api<{ok:true}>(`/admin/assets/${encodeURIComponent(assetId)}/publish`,{method:'POST'});
 export type { LicensePlan };

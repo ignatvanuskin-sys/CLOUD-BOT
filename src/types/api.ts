@@ -8,3 +8,5 @@ export type AuthResponse = { token?:string; expiresIn:number; user:User };
 export type Order = { id:string; product_id:string; license_id:string; amount_xtr:number; currency:'XTR'; status:'pending'|'fulfilled' };
 export type ApiErrorPayload = { error?: { code?:string; message?:string; requestId?:string } | string };
 export type ProductFilters = { q?:string; type?:ProductType; category?:string; sort?:'popular'|'new'|'price'; limit?:number; offset?:number };
+export type FavoriteProduct = Product & { product_id:string; created_at:string };
+export type UserOrder = { id:string; product_id:string; license_id:string; product_title:string|null; amount_xtr:number; currency:string; status:string; created_at:string; paid_at:string|null; fulfilled_at:string|null };
