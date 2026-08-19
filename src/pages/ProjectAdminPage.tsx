@@ -5,8 +5,8 @@ import {createProject, getAccess, publishProjectAsset, uploadProjectAsset} from 
 import {Button, Card, EmptyState, PageLoader} from '../components/ui';
 import {useSession} from '../providers/AppProviders';
 
-type ProjectForm = { title: string; slug: string; type: 'template' | 'ready_bot' | 'module' | 'service'; category: string; result: string; description: string; stack: string; version: string };
-const initialForm: ProjectForm = { title: '', slug: '', type: 'template', category: '', result: '', description: '', stack: '', version: '1.0.0' };
+type ProjectForm = { title: string; slug: string; type: 'ready_bot' | 'module' | 'service'; category: string; result: string; description: string; stack: string; version: string };
+const initialForm: ProjectForm = { title: '', slug: '', type: 'ready_bot', category: '', result: '', description: '', stack: '', version: '1.0.0' };
 
 export default function ProjectAdminPage() {
   const auth = useSession();
