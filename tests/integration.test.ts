@@ -36,7 +36,7 @@ describe('integration smoke', () => {
     const login = await request(app).post('/api/auth/telegram').send({ devTelegramId: 77 }).expect(200);
     expect(login.body.token).toEqual(expect.any(String));
     expect(login.body.expiresIn).toEqual(expect.any(Number));
-    expect(login.headers['set-cookie']?.[0]).toMatch(/cloud_bot_session=.*HttpOnly; SameSite=Lax/);
+    expect(login.headers['set-cookie']).toBeUndefined();
     const token = login.body.token;
 
     await request(app).get('/api/me').set('Authorization', `Bearer ${token}`).expect(200);
