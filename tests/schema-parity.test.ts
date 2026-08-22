@@ -27,14 +27,22 @@ describe('SQLite/PostgreSQL schema parity', () => {
     for (const file of ['001_initial.sql', '004_user_favorites.sql']) {
       pgSql += await readFile(new URL(`../server/db/postgres-migrations/${file}`, import.meta.url), 'utf8');
     }
-    const patterns = [
+    const sqlitePatterns = [
       /payload\s+text\s+unique/i,
-      /orders\(user_id,\s*idempotency_key\)/i,
-      /unique\(user_id,\s*product_id\)/i,
+      /orders[\s\S]*user_id[\s\S]*idempotency_key/i,
+      /unique\s*\(\s*user_id\s*,\s*product_id\s*\)/i,
       /token_hash\s+text\s+unique/i,
     ];
-    for (const pattern of patterns) {
+    const postgresPatterns = [
+      /payload\s+text\s+unique/i,
+      /idx_orders_user_idempotency[\s\S]*orders\s*\(\s*user_id\s*,\s*idempotency_key\s*\)/i,
+      /unique\s*\(\s*user_id\s*,\s*product_id\s*\)/i,
+      /token_hash\s+text\s+unique/i,
+    ];
+    for (const pattern of sqlitePatterns) {
       expect(dbSource, `SQLite must match ${pattern}`).toMatch(pattern);
+    }
+    for (const pattern of postgresPatterns) {
       expect(pgSql, `PostgreSQL must match ${pattern}`).toMatch(pattern);
     }
   });

@@ -49,7 +49,9 @@ CREATE TABLE IF NOT EXISTS support_requests(id TEXT PRIMARY KEY, user_id INTEGER
 CREATE TABLE IF NOT EXISTS admin_users(telegram_id TEXT PRIMARY KEY, role TEXT NOT NULL CHECK(role IN ('owner','editor','support')));
 CREATE TABLE IF NOT EXISTS audit_log(id TEXT PRIMARY KEY, actor_user_id INTEGER, action TEXT NOT NULL, object_type TEXT, object_id TEXT, result TEXT, meta TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS webhook_updates(update_id TEXT PRIMARY KEY, processed_at TEXT DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS user_favorites(id TEXT PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id), product_id TEXT NOT NULL REFERENCES products(id), created_at TEXT DEFAULT CURRENT_TIMESTAMP, UNIQUE(user_id, product_id));
 CREATE INDEX IF NOT EXISTS idx_orders_user_status ON orders(user_id,status);
+CREATE INDEX IF NOT EXISTS idx_favorites_user ON user_favorites(user_id);
 CREATE INDEX IF NOT EXISTS idx_orders_payload ON orders(payload);
 CREATE INDEX IF NOT EXISTS idx_entitlements_owner ON entitlements(user_id,active);
 CREATE INDEX IF NOT EXISTS idx_assets_product_version ON product_assets(product_id,version);

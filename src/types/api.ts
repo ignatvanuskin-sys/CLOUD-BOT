@@ -10,5 +10,3 @@ export type UserOrder = { id:string; product_id:string; license_id:string; produ
 export type FavoriteProduct = { id:string; product_id:string; created_at:string; slug:string; type:ProductType; category:string; title:string; result:string; description:string|null; stack:string|null; version:string; price_from:number|null };
 export type ApiErrorPayload = { error?: { code?:string; message?:string; requestId?:string } | string };
 export type ProductFilters = { q?:string; type?:ProductType; category?:string; sort?:'popular'|'new'|'price'; limit?:number; offset?:number };
-export type FavoriteProduct = Product & { product_id:string; created_at:string };
-export type UserOrder = { id:string; product_id:string; license_id:string; product_title:string|null; amount_xtr:number; currency:string; status:string; created_at:string; paid_at:string|null; fulfilled_at:string|null };
