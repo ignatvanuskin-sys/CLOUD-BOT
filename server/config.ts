@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
-  PORT: z.coerce.number().int().positive().default(8787),
+  PORT: z.coerce.number().int().min(0).default(8787),
   TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(10).default(1),
   BOT_TOKEN: z.union([z.string().regex(/^\d+:[A-Za-z0-9_-]{20,}$/), z.literal('TEST_TOKEN')]).optional(),
   BOT_USERNAME: z.string().regex(/^[A-Za-z0-9_]{5,32}$/).optional(),
@@ -45,7 +45,7 @@ export function loadConfig(env = process.env): AppConfig {
   const parsed = EnvSchema.safeParse(env);
   if (!parsed.success) throw new Error('Invalid environment: ' + parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '));
 
-  const config = parsed.data;
+  const config = { ...parsed.data, PORT: parsed.data.PORT || 8787 };
   const isProduction = config.NODE_ENV === 'production';
   const missing: string[] = [];
   if (isProduction) {
