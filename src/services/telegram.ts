@@ -59,8 +59,20 @@ export function readClipboard() {
     navigator.clipboard.readText().then(text => resolve(text.slice(0, 2000))).catch(() => resolve(''));
   });
 }
-export function cloudGet(key: string) { return new Promise<string>(resolve => telegram?.CloudStorage?.getItem ? telegram.CloudStorage.getItem(key, (_error, value) => resolve(value || '')) : resolve('')); }
-export function cloudSet(key: string, value: string) { return new Promise<void>(resolve => telegram?.CloudStorage?.setItem ? telegram.CloudStorage.setItem(key, value, () => resolve()) : resolve()); }
+export function cloudGet(key: string) {
+  return new Promise<string>(resolve => {
+    const storage = telegram?.CloudStorage;
+    if (!storage?.getItem) return resolve('');
+    try { storage.getItem(key, (_error, value) => resolve(value || '')); } catch { resolve(''); }
+  });
+}
+export function cloudSet(key: string, value: string) {
+  return new Promise<void>(resolve => {
+    const storage = telegram?.CloudStorage;
+    if (!storage?.setItem) return resolve();
+    try { storage.setItem(key, value, () => resolve()); } catch { resolve(); }
+  });
+}
 export function authenticateBiometry() {
   return new Promise<boolean>(resolve => { const manager = telegram?.BiometricManager; if (!manager) return resolve(false); manager.init(() => { if (!manager.isBiometricAvailable) return resolve(false); manager.requestAccess({ reason: 'Защитить доступ к покупкам' }, granted => granted ? manager.authenticate({ reason: 'Подтвердите вход' }, resolve) : resolve(false)); }); });
 }

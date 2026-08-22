@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { Award, Bell, BellRing, ChevronRight, Copy, Crown, Fingerprint, Globe2, Heart, History, Languages, LockKeyhole, LogOut, Moon, Palette, ReceiptText, Settings, Shield, Trash2, Users, MoreHorizontal, Sparkles, CheckCircle2 } from 'lucide-react';
+import { Award, Bell, BellRing, ChevronRight, Copy, Crown, Fingerprint, FolderPlus, Globe2, Heart, History, Languages, LockKeyhole, LogOut, Moon, Palette, ReceiptText, Settings, Shield, Trash2, Users, MoreHorizontal, Sparkles, CheckCircle2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { getPurchases, logout } from '../api/queries';
+import { getPurchases, getAccess, logout } from '../api/queries';
 import { session } from '../api/client';
 import { Badge, Button, Card, EmptyState, Switch } from '../components/ui';
 import { useAppFavorites, useAppPreferences, useSession } from '../providers/AppProviders';
@@ -24,6 +24,7 @@ export function ProfilePage() {
   const favorites = useAppFavorites();
   const { preferences } = useAppPreferences();
   const purchases = useQuery({ queryKey: ['purchases'], queryFn: getPurchases, enabled: auth.authenticated });
+  const access = useQuery({ queryKey: ['access'], queryFn: getAccess, enabled: auth.authenticated });
   const first = preferences.privateMode ? 'Приватный профиль' : telegram?.initDataUnsafe?.user?.first_name || auth.user?.name || 'Гость';
   const last = preferences.privateMode ? '' : telegram?.initDataUnsafe?.user?.last_name || '';
   const username = !preferences.privateMode && telegram?.initDataUnsafe?.user?.username ? `@${telegram.initDataUnsafe.user.username}` : 'Данные защищены Telegram';
@@ -52,7 +53,7 @@ export function ProfilePage() {
 
     <section className="profile-section">
       <div className="profile-section-heading"><div><span className="eyebrow">Workspace center</span><h2>Ваш профиль</h2><p>Управляйте покупками, доступом и настройками пространства.</p></div><Badge>{licenseCount ? 'Есть активные лицензии' : 'Готов к запуску'}</Badge></div>
-      <div className="profile-menu-grid">{profileMenu.map(([Icon, title, text, to], i) => <motion.button className="profile-menu-item" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * .04 }} key={to} onClick={() => nav(to)}><span className="menu-icon"><Icon /></span><span className="menu-copy"><b>{title}</b><small>{text}</small></span><ChevronRight /></motion.button>)}</div>
+      <div className="profile-menu-grid">{profileMenu.map(([Icon, title, text, to], i) => <motion.button className="profile-menu-item" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * .04 }} key={to} onClick={() => nav(to)}><span className="menu-icon"><Icon /></span><span className="menu-copy"><b>{title}</b><small>{text}</small></span><ChevronRight /></motion.button>)}{access.data?.canCreateProjects ? <motion.button className="profile-menu-item" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: profileMenu.length * .04 }} onClick={() => nav('/admin/projects')}><span className="menu-icon"><FolderPlus /></span><span className="menu-copy"><b>Управление товарами</b><small>Создать проект и опубликовать</small></span><ChevronRight /></motion.button> : null}</div>
     </section>
 
     <Card className="profile-premium-card"><span className="premium-mark"><Crown /></span><div><span className="eyebrow">Cloud Bot Premium</span><b>Больше скорости. Меньше рутины.</b><small>Лицензированные решения и защищённая выдача в одном пространстве.</small></div><Button className="primary" onClick={() => nav('/premium')}>Открыть Premium</Button></Card>

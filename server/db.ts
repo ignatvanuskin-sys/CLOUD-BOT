@@ -10,6 +10,7 @@ export const POSTGRES_MIGRATIONS = [
   { version: '002_delivery_refund_state_machines', file: '002_delivery_refund_state_machines.sql' },
   { version: '003_catalog_trigram_search', file: '003_catalog_trigram_search.sql' },
   { version: '004_catalog_sort_indexes', file: '004_catalog_sort_indexes.sql' },
+  { version: '004_user_favorites', file: '004_user_favorites.sql' },
   { version: '005_delivery_cleanup_indexes', file: '005_delivery_cleanup_indexes.sql' },
 ] as const;
 
