@@ -37,6 +37,19 @@ export const AdminProductBodySchema = z.object({
   status: z.enum(['draft', 'published', 'archived']).optional(),
 });
 
+// License plan fields follow the existing license_plans table schema.
+// Currency is fixed to XTR by the checkout flow — no currency field exists in the schema.
+export const LicensePlanBodySchema = z.object({
+  name: z.string().min(1).max(120),
+  // price_xtr: Telegram Stars invoice amount (integer); capped at 2500 per Telegram invoice limit.
+  price_xtr: z.number().int().min(1).max(2500),
+  projects: z.number().int().min(1).max(1000).optional(),
+  commercial: z.union([z.literal(0), z.literal(1)]).optional(),
+  support_days: z.number().int().min(0).max(3650).optional(),
+  updates_days: z.number().int().min(0).max(3650).optional(),
+  terms: z.string().max(2000).optional(),
+});
+
 export const RefundBodySchema = z.object({
   reason: z.string().min(5).max(2000),
 });

@@ -9,7 +9,7 @@ import { db } from './db';
 import { loadConfig } from './config';
 import { parseStartParam, validateTelegramInitData } from './schema';
 import { createAssetKey, hashToken, readAsset, storage } from './storage';
-import { validateBody, FavoriteBodySchema, OrderBodySchema, AdminProductBodySchema, RefundBodySchema, ReconcileBodySchema } from './validation';
+import { validateBody, FavoriteBodySchema, OrderBodySchema, AdminProductBodySchema, LicensePlanBodySchema, RefundBodySchema, ReconcileBodySchema } from './validation';
 import { scanArchiveBuffer } from './scanner';
 import { createTtlStore, type TtlStore } from './state';
 import { BOT_COMMANDS, registerBotHandlers, TELEGRAM_ALLOWED_UPDATES } from './telegram';
@@ -290,6 +290,22 @@ export function createApp() {
   });
 
   app.post('/api/admin/products', user, adminRole(['owner', 'editor']), limiter, async (req: any, res) => { const parsed = validateBody(AdminProductBodySchema, req.body); if (!parsed.ok) return safeError(res, 400, 'validation_failed', parsed.issues.join('; ')); const p = parsed.data; const id = p.id || nanoid(8); await db.prepare('insert into products(id,slug,type,category,title,result,description,stack,demo_url,preview,version,changelog,status) values(?,?,?,?,?,?,?,?,?,?,?,?,?)').run(id, p.slug || id, p.type, p.category, p.title, p.result, p.description || '', p.stack || '', p.demo_url || '', p.preview || '', p.version || '1.0.0', p.changelog || '', 'draft'); await audit(req.userId, 'product_create', 'product', id); res.status(201).json({ id, status: 'draft' }); });
+  app.get('/api/admin/products/:id/plans', user, adminRole(['owner', 'editor']), async (req: any, res) => {
+    const product = await db.prepare('select id from products where id=?').get(req.params.id) as any;
+    if (!product) return safeError(res, 404, 'product_not_found', 'Товар не найден');
+    res.json({ items: await db.prepare('select id,product_id,name,price_xtr,projects,commercial,support_days,updates_days,terms from license_plans where product_id=? order by price_xtr').all(req.params.id) });
+  });
+  app.post('/api/admin/products/:id/plans', user, adminRole(['owner', 'editor']), limiter, async (req: any, res) => {
+    const product = await db.prepare('select id from products where id=?').get(req.params.id) as any;
+    if (!product) return safeError(res, 404, 'product_not_found', 'Товар не найден');
+    const parsed = validateBody(LicensePlanBodySchema, req.body);
+    if (!parsed.ok) return safeError(res, 400, 'validation_failed', parsed.issues.join('; '));
+    const p = parsed.data;
+    const id = nanoid(8);
+    await db.prepare('insert into license_plans(id,product_id,name,price_xtr,projects,commercial,support_days,updates_days,terms) values(?,?,?,?,?,?,?,?,?)').run(id, req.params.id, p.name, p.price_xtr, p.projects ?? 1, p.commercial ?? 0, p.support_days ?? 0, p.updates_days ?? 0, p.terms || '');
+    await audit(req.userId, 'license_plan_create', 'product', req.params.id, 'ok', { planId: id });
+    res.status(201).json({ plan: { id, product_id: req.params.id, name: p.name, price_xtr: p.price_xtr, projects: p.projects ?? 1, commercial: p.commercial ?? 0, support_days: p.support_days ?? 0, updates_days: p.updates_days ?? 0, terms: p.terms || '' } });
+  });
   async function finalizeRefund(orderId: string, reason: string) {
     return db.transaction(async (tx) => {
       const finalized = await tx.prepare("update orders set status='refunded',refund_reason=?,refund_external_confirmed_at=COALESCE(refund_external_confirmed_at,CURRENT_TIMESTAMP),refunded_at=COALESCE(refunded_at,CURRENT_TIMESTAMP),refund_last_error=NULL where id=? and status in ('refund_requested','refund_manual_review','refunded') returning id").get(reason, orderId);

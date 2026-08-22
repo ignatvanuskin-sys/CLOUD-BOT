@@ -7,7 +7,7 @@
     "preview": "vite preview --host 0.0.0.0",
     "server": "tsx server/index.ts",
     "seed": "tsx server/seed.ts",
-    "test": "vitest run tests/core.test.ts tests/telegram.test.ts tests/sqlite-migration.test.ts tests/storage.test.ts tests/stars-payment.test.ts tests/readiness.test.ts tests/schema-parity.test.ts tests/project-admin-security.test.ts tests/button-coverage.test.ts",
+    "test": "vitest run tests/core.test.ts tests/telegram.test.ts tests/sqlite-migration.test.ts tests/storage.test.ts tests/stars-payment.test.ts tests/readiness.test.ts tests/schema-parity.test.ts tests/project-admin-security.test.ts tests/button-coverage.test.ts tests/auth-client.test.ts tests/cloudstorage-fallback.test.ts tests/favorites-admin-migration.test.ts tests/license-plan-flow.test.ts",
     "typecheck": "tsc -b --noEmit",
     "lint": "eslint .",
     "test:integration": "vitest run tests/integration.test.ts",

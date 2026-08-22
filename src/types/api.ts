@@ -1,6 +1,7 @@
 export type ProductType = 'ready_bot' | 'module' | 'service';
 export type Product = { id:string; slug:string; type:ProductType; category:string; title:string; result:string; description:string|null; stack:string|null; demo_url:string|null; preview?:string|null; version:string; changelog:string|null; price_from:number|null; created_at?:string; updated_at?:string };
 export type LicensePlan = { id:string; product_id:string; name:string; price_xtr:number; projects:number; commercial:0|1; support_days:number; updates_days:number; terms:string|null };
+export type LicensePlanInput = { name:string; price_xtr:number; projects?:number; commercial?:0|1; support_days?:number; updates_days?:number; terms?:string };
 export type ProductDetail = { product:Product; plans:LicensePlan[] };
 export type Purchase = { id:string; product_id:string; license_id:string; order_id:string; active:0|1; created_at:string; title:string; version:string; license_name:string };
 export type User = { id:number; name:string|null };
