@@ -33,7 +33,7 @@ const EnvSchema = z.object({
   S3_FORCE_PATH_STYLE: z.enum(['true', 'false']).default('false'),
 
   REDIS_URL: z.string().optional(),
-  REDIS_KEY_PREFIX: z.string().default('cloud-bot:local:'),
+  REDIS_KEY_PREFIX: z.string().min(1).max(128).default('cloud-bot:local:'),
   REDIS_TLS: z.enum(['true', 'false']).default('false'),
   DATABASE_SSL_REJECT_UNAUTHORIZED: z.enum(['true', 'false']).optional(),
   METRICS_TOKEN: z.string().min(16).max(256).optional(),
@@ -64,6 +64,8 @@ export function loadConfig(env = process.env): AppConfig {
     if (config.REDIS_TLS !== 'true' && !(onRailway && config.REDIS_URL?.startsWith('redis://'))) {
       missing.push('REDIS_TLS must be true in production');
     }
+    if (config.REDIS_KEY_PREFIX === 'cloud-bot:local:') missing.push('REDIS_KEY_PREFIX must be overridden in production');
+    if (config.MAX_UPLOAD_BYTES > 100 * 1024 * 1024) missing.push('MAX_UPLOAD_BYTES must not exceed 100MB in production');
   }
   if (missing.length) throw new Error('Production configuration error: ' + missing.join(', '));
   return { ...config, isProduction, allowedOrigin: config.CORS_ORIGIN || config.WEBAPP_URL };
