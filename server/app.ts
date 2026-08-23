@@ -76,7 +76,9 @@ export function createApp() {
 
   const distDir = path.resolve('dist');
   app.use('/assets', express.static(path.join(distDir, 'assets'), { maxAge: '1y', immutable: true }));
-  app.use(express.static(distDir, { maxAge: '1h' }));
+  // Keep hashed assets cacheable, but route HTML through the no-cache fallback below
+  // so Telegram WebView does not keep an old index.html after a deployment.
+  app.use(express.static(distDir, { maxAge: '1h', index: false }));
   app.use((req, res, next) => {
     const startedAt = Date.now();
     let logged = false;
