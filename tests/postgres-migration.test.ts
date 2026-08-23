@@ -11,6 +11,7 @@ describe('PostgreSQL migration contract', () => {
       '002_delivery_refund_state_machines',
       '003_catalog_trigram_search',
       '004_catalog_sort_indexes',
+      '004_user_favorites',
       '005_delivery_cleanup_indexes',
     ]);
     expect(new Set(POSTGRES_MIGRATIONS.map(({ version }) => version)).size).toBe(POSTGRES_MIGRATIONS.length);
