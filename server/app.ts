@@ -44,6 +44,9 @@ export function createApp() {
         await bot.api.setMyCommands([...BOT_COMMANDS], { scope, language_code: 'en' });
       }
       if (!config.WEBAPP_URL) throw new Error('WEBAPP_URL is required for webhook mode');
+      // Keep Telegram's persistent menu button in sync with the deployed Mini App URL.
+      // A versioned path also forces Telegram to create a fresh WebView after UI releases.
+      await bot.api.setChatMenuButton({ menu_button: { type: 'web_app', text: 'Открыть магазин', web_app: { url: config.WEBAPP_URL } } });
       const webhookUrl = new URL('/api/webhooks/telegram', config.WEBAPP_URL).toString();
       await bot.api.setWebhook(webhookUrl, {
         secret_token: config.WEBHOOK_SECRET,
