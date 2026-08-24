@@ -21,7 +21,8 @@
     "db:verify-import": "node scripts/db.mjs verify-import",
     "security:scan": "node scripts/security-scan.mjs",
     "deps:audit": "npm audit --audit-level=high",
-    "smoke:load": "node scripts/smoke-load.mjs"
+    "smoke:load": "node scripts/smoke-load.mjs",
+    "test:e2e:reuse": "playwright test --config=playwright.reuse.config.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1104.0",

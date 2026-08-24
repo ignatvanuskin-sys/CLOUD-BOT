@@ -1,12 +1,12 @@
 import { defineConfig } from '@playwright/test';
 
-const testEnv = { ...process.env, NODE_ENV: 'development', ALLOW_DEV_LOGIN: 'true', SEED_DEV_DATA: 'true', DB_DRIVER: 'sqlite', STORAGE_DRIVER: 'local', DATABASE_PATH: './data/e2e.sqlite', STORAGE_LOCAL_ROOT: './storage/e2e', ADMIN_TELEGRAM_IDS: '777' };
+const testEnv = { ...process.env, NODE_ENV: 'development', ALLOW_DEV_LOGIN: 'true', SEED_DEV_DATA: 'true', DB_DRIVER: 'sqlite', DATABASE_PATH: './data/playwright.sqlite', STORAGE_DRIVER: 'local', STORAGE_LOCAL_ROOT: './storage/playwright', ADMIN_TELEGRAM_IDS: '777', PORT: '8788' };
 
 export default defineConfig({
   testDir: './tests/e2e',
   webServer: [
-    { command: 'npm run dev', port: 5173, reuseExistingServer: false, env: testEnv },
-    { command: 'npm run server', port: 8787, reuseExistingServer: false, env: testEnv },
+    { command: 'npm run dev -- --port 5174', port: 5174, reuseExistingServer: false, env: testEnv },
+    { command: 'npm run server', port: 8788, reuseExistingServer: false, env: testEnv }
   ],
-  use: { baseURL: 'http://127.0.0.1:5173', viewport: { width: 390, height: 844 } },
+  use: { baseURL: 'http://127.0.0.1:5174', viewport: { width: 390, height: 844 } },
 });
