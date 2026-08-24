@@ -63,7 +63,7 @@ export function cloudGet(key: string) {
   return new Promise<string>(resolve => {
     const storage = telegram?.CloudStorage;
     if (!storage?.getItem) return resolve('');
-    try { storage.getItem(key, (_error, value) => resolve(value || '')); } catch { resolve(''); }
+    try { storage.getItem(key, (error, value) => resolve(error ? '' : value || '')); } catch { resolve(''); }
   });
 }
 export function cloudSet(key: string, value: string) {
