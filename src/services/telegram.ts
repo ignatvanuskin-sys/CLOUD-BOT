@@ -4,7 +4,7 @@ declare global {
 
 type TelegramNativeButton = { setParams?: (params: Record<string, unknown>) => void; showProgress?: () => void; hideProgress?: () => void; onClick?: (handler: () => void) => void; offClick?: (handler: () => void) => void; hide?: () => void };
 type TelegramWebApp = {
-  initData?: string; initDataUnsafe?: { start_param?: string; user?: { first_name?: string; last_name?: string; username?: string } }; viewportStableHeight?: number; colorScheme?: 'light' | 'dark';
+  initData?: string; initDataUnsafe?: { start_param?: string; user?: { first_name?: string; last_name?: string; username?: string } }; version?: string; viewportStableHeight?: number; viewportHeight?: number; colorScheme?: 'light' | 'dark'; safeAreaInset?: { top?: number; bottom?: number; left?: number; right?: number }; contentSafeAreaInset?: { top?: number; bottom?: number; left?: number; right?: number };
   HapticFeedback?: { impactOccurred?: (style: 'light' | 'medium' | 'heavy') => void; selectionChanged?: () => void; notificationOccurred?: (type: 'success' | 'error') => void };
   ready?: () => void; expand?: () => void; enableClosingConfirmation?: () => void;
   onEvent?: (name: string, handler: () => void) => void; offEvent?: (name: string, handler: () => void) => void;
