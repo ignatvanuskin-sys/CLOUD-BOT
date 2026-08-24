@@ -59,17 +59,21 @@ export function readClipboard() {
     navigator.clipboard.readText().then(text => resolve(text.slice(0, 2000))).catch(() => resolve(''));
   });
 }
+function supportsCloudStorage() {
+  const version = Number((telegram as TelegramWebApp & { version?: string })?.version || 0);
+  return Boolean(telegram?.CloudStorage?.getItem && (!version || version >= 6.9));
+}
 export function cloudGet(key: string) {
   return new Promise<string>(resolve => {
     const storage = telegram?.CloudStorage;
-    if (!storage?.getItem) return resolve('');
+    if (!supportsCloudStorage() || !storage?.getItem) return resolve('');
     try { storage.getItem(key, (error, value) => resolve(error ? '' : value || '')); } catch { resolve(''); }
   });
 }
 export function cloudSet(key: string, value: string) {
   return new Promise<void>(resolve => {
     const storage = telegram?.CloudStorage;
-    if (!storage?.setItem) return resolve();
+    if (!supportsCloudStorage() || !storage?.setItem) return resolve();
     try { storage.setItem(key, value, () => resolve()); } catch { resolve(); }
   });
 }
