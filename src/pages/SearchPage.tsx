@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Check, ChevronRight, Search as SearchIcon, SlidersHorizontal, X } from 'lucide-react';
@@ -55,4 +55,4 @@ export default function SearchPage() {
   </div>;
 }
 
-function Chooser({label,value,options,onChange}:{label:string;value:string;options:string[];onChange:(value:string)=>void}){const [open,setOpen]=useState(false);return <div className="chooser"><button type="button" className="chooser-trigger" aria-haspopup="listbox" aria-expanded={open} onClick={()=>setOpen(v=>!v)}><span><small>{label}</small><b>{value}</b></span><ChevronRight aria-hidden/></button>{open&&<div className="chooser-menu" role="listbox" aria-label={label}>{options.map(option=><button type="button" role="option" aria-selected={option===value} key={option} onClick={()=>{onChange(option);setOpen(false);haptic.select()}}>{option===value?<Check aria-hidden/>:<span/>}{option}</button>)}</div>}</div>}
+function Chooser({label,value,options,onChange}:{label:string;value:string;options:string[];onChange:(value:string)=>void}){const [open,setOpen]=useState(false);const ref=useRef<HTMLDivElement>(null);useEffect(()=>{if(!open)return;const close=(event:MouseEvent)=>{if(!ref.current?.contains(event.target as Node))setOpen(false)};const escape=(event:KeyboardEvent)=>{if(event.key==='Escape')setOpen(false)};document.addEventListener('mousedown',close);document.addEventListener('keydown',escape);return()=>{document.removeEventListener('mousedown',close);document.removeEventListener('keydown',escape)}},[open]);return <div className="chooser" ref={ref}><button type="button" className="chooser-trigger" aria-haspopup="listbox" aria-expanded={open} onClick={()=>setOpen(v=>!v)}><span><small>{label}</small><b>{value}</b></span><ChevronRight aria-hidden/></button>{open&&<div className="chooser-menu" role="listbox" aria-label={label}>{options.map(option=><button type="button" role="option" aria-selected={option===value} key={option} onClick={()=>{onChange(option);setOpen(false);haptic.select()}}>{option===value?<Check aria-hidden/>:<span/>}{option}</button>)}</div>}</div>}
