@@ -21,7 +21,7 @@ type TelegramWebApp = {
 
 export const telegram = typeof window !== 'undefined' ? window.Telegram?.WebApp : undefined;
 export const isTelegram = () => Boolean(telegram?.initData);
-export const haptic = { tap: (style: 'light' | 'medium' | 'heavy' = 'light') => telegram?.HapticFeedback?.impactOccurred?.(style), select: () => telegram?.HapticFeedback?.selectionChanged?.(), success: () => telegram?.HapticFeedback?.notificationOccurred?.('success'), error: () => telegram?.HapticFeedback?.notificationOccurred?.('error') };
+export const haptic = { tap: (style: 'light' | 'medium' | 'heavy' = 'light') => supports('6.1') && telegram?.HapticFeedback?.impactOccurred?.(style), select: () => supports('6.1') && telegram?.HapticFeedback?.selectionChanged?.(), success: () => supports('6.1') && telegram?.HapticFeedback?.notificationOccurred?.('success'), error: () => supports('6.1') && telegram?.HapticFeedback?.notificationOccurred?.('error') };
 function supports(version: string) { try { return !telegram?.isVersionAtLeast || telegram.isVersionAtLeast(version); } catch { return false; } }
 export function initTelegram() { telegram?.ready?.(); if (supports('6.1')) telegram?.expand?.(); if (supports('6.2')) telegram?.enableClosingConfirmation?.(); }
 export function onTelegramEvent(name: string, handler: () => void) { telegram?.onEvent?.(name, handler); return () => telegram?.offEvent?.(name, handler); }
