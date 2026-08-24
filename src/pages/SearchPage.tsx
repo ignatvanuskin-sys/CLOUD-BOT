@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Filter, Search as SearchIcon, SlidersHorizontal, X } from 'lucide-react';
+import { Check, ChevronRight, Search as SearchIcon, SlidersHorizontal, X } from 'lucide-react';
 import { CATEGORIES } from '../constants/app';
 import { ProductGrid } from '../features/catalog';
 import { useCatalog } from '../hooks/useCatalog';
@@ -49,8 +49,10 @@ export default function SearchPage() {
       <div className="filter-row" aria-label="Категория">
         {CATEGORIES.map(([id, label]) => <button type="button" key={id} className={category === id ? 'active' : ''} aria-pressed={category === id} onClick={() => { setCategory(id); haptic.select(); }}>{label}</button>)}
       </div>
-      <div className="select-row"><label><Filter aria-hidden/>Тип<select aria-label="Тип продукта" value={type || ''} onChange={event => setType((event.target.value || undefined) as ProductType | undefined)}><option value="">Любой</option><option value="ready_bot">Готовые боты</option><option value="module">Модули</option><option value="service">Сервисы</option></select></label><label>Сортировка<select aria-label="Сортировка результатов" value={sort} onChange={event => setSort(event.target.value as Sort)}><option value="popular">Актуальные</option><option value="new">Сначала новые</option><option value="price">Сначала доступные</option></select></label></div>
+      <div className="select-row"><Chooser label="Тип" value={type === 'ready_bot' ? 'Готовые боты' : type === 'module' ? 'Модули' : type === 'service' ? 'Сервисы' : 'Любой'} options={['Любой','Готовые боты','Модули','Сервисы']} onChange={value => setType(({ 'Готовые боты':'ready_bot','Модули':'module','Сервисы':'service'} as Record<string,ProductType|undefined>)[value])}/><Chooser label="Сортировка" value={sort === 'new' ? 'Сначала новые' : sort === 'price' ? 'Сначала доступные' : 'Актуальные'} options={['Актуальные','Сначала новые','Сначала доступные']} onChange={value => setSort(({ 'Сначала новые':'new','Сначала доступные':'price','Актуальные':'popular'} as Record<string,Sort>)[value]||'popular')}/></div>
     </form>
     <AnimatePresence mode="wait">{query.isLoading ? <motion.div className="product-grid" role="status" aria-label="Загрузка результатов"><Skeleton/><Skeleton/><Skeleton/><Skeleton/></motion.div> : query.error ? <ErrorState error={query.error} retry={() => query.refetch()}/> : query.data?.items.length ? <motion.div key={`${q}-${category}-${type}-${sort}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }}><div className="result-count" aria-live="polite">Найдено: <b>{query.data.items.length}</b></div><ProductGrid items={query.data.items}/></motion.div> : <EmptyState title="Совпадений нет" text="Измените запрос или сбросьте фильтры." action={resetFilters}/>}</AnimatePresence>
   </div>;
 }
+
+function Chooser({label,value,options,onChange}:{label:string;value:string;options:string[];onChange:(value:string)=>void}){const [open,setOpen]=useState(false);return <div className="chooser"><button type="button" className="chooser-trigger" aria-haspopup="listbox" aria-expanded={open} onClick={()=>setOpen(v=>!v)}><span><small>{label}</small><b>{value}</b></span><ChevronRight aria-hidden/></button>{open&&<div className="chooser-menu" role="listbox" aria-label={label}>{options.map(option=><button type="button" role="option" aria-selected={option===value} key={option} onClick={()=>{onChange(option);setOpen(false);haptic.select()}}>{option===value?<Check aria-hidden/>:<span/>}{option}</button>)}</div>}</div>}

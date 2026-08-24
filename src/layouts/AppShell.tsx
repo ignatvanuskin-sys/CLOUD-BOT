@@ -1,5 +1,5 @@
-import {useEffect} from 'react';import {NavLink,Outlet,useLocation,useNavigate} from 'react-router-dom';import {Bell,Home,Search,UserRound,ReceiptText} from 'lucide-react';import {motion} from 'framer-motion';import {telegram,haptic} from '../services/telegram';import {useSession} from '../providers/AppProviders';import {cn} from '../utils/cn';
-const nav=[['/','Главная',Home],['/search','Каталог',Search],['/history','Заказы',ReceiptText],['/profile','Профиль',UserRound]] as const;
+import {useEffect} from 'react';import {NavLink,Outlet,useLocation,useNavigate} from 'react-router-dom';import {Bell,Home,MessageCircle,UserRound,ReceiptText} from 'lucide-react';import {motion} from 'framer-motion';import {telegram,haptic} from '../services/telegram';import {useSession} from '../providers/AppProviders';import {cn} from '../utils/cn';
+const nav=[['/','Главная',Home],['/history','Заказы',ReceiptText],['/chats','Чаты',MessageCircle],['/profile','Профиль',UserRound]] as const;
 export function AppShell(){const location=useLocation(),navigate=useNavigate(),{user}=useSession();
 
  useEffect(()=>{const back=()=>navigate(-1);if(location.pathname==='/')telegram?.BackButton?.hide?.();else{telegram?.BackButton?.show?.();telegram?.BackButton?.onClick?.(back)}return()=>telegram?.BackButton?.offClick?.(back)},[location.pathname,navigate]);
