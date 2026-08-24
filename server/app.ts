@@ -95,6 +95,10 @@ export function createApp() {
     const releasePath = new URL(config.WEBAPP_URL).pathname.replace(/\/$/, '');
     if (releasePath && releasePath !== '/') {
       app.use(releasePath, express.static(distDir, { maxAge: '1h', index: false }));
+      app.get(`${releasePath}/*splat`, (_req, res) => {
+        res.setHeader('Cache-Control', 'no-cache');
+        res.sendFile(path.join(distDir, 'index.html'));
+      });
     }
   }
   // Keep hashed assets cacheable, but route HTML through the no-cache fallback below
