@@ -2,7 +2,7 @@
 
 Final audit completed for CLOUD-BOT Mini App. Local engineering gates pass, GitHub is synchronized, Railway production deployment is healthy, and live guest browser verification confirms production SPA loading, responsive containment, and native mouse-wheel scrolling.
 
-Final verdict: **READY WITH EXTERNAL GATES**. The remaining gates require a real authenticated Telegram session and physical Telegram clients; no authentication bypass or production payment was used.
+Final verdict: **READY WITH EXTERNAL GATES**. The remaining gates require a real authenticated Telegram session and physical Telegram clients; no authentication bypass or production payment was used. A safe-area compatibility improvement was added locally and passed all local gates, but its production deployment is currently NOT VERIFIED because Railway CLI authorization expired.
 
 # Current Production State
 
@@ -34,7 +34,7 @@ Live production native Playwright wheel input moved `scrollY` from 0 to 500 at 3
 
 Official Telegram documentation was consulted for viewport/safe-area concepts, `viewport_changed`, `safeAreaInset`, `contentSafeAreaInset`, BackButton, MainButton, and CloudStorage. Current code uses Telegram ready/expand, Telegram theme and viewport values, safe-area CSS variables, BackButton/MainButton wrappers, CloudStorage fallback, and haptic helpers.
 
-CloudStorage was additionally guarded for unsupported Telegram versions so the client does not invoke unavailable APIs.
+CloudStorage was additionally guarded for unsupported Telegram versions so the client does not invoke unavailable APIs. Telegram `safeAreaInset` and `contentSafeAreaInset` values are now applied to CSS variables locally; deployment of this latest change is pending Railway re-authentication.
 
 | Requirement | Status | Evidence |
 |---|---|---|
@@ -91,7 +91,8 @@ Semantic controls, accessible gear label, focus-visible rules, labels, and touch
 - release path: HTTP 200
 - `/profile`, `/settings`, `/search`, `/favorites`: HTTP 200 SPA fallback
 - Latest deployment: SUCCESS / RUNNING
-- Latest fix deployment commit: `d59bc60`
+- Latest verified production deployment commit: `d59bc60`
+- Local HEAD: `e5cbac0` (safe-area fix; production deployment NOT VERIFIED)
 
 # Bugs Found
 
@@ -111,9 +112,10 @@ Semantic controls, accessible gear label, focus-visible rules, labels, and touch
 
 # External Gates
 
-1. Provide a safe real Telegram authenticated session or staging environment.
-2. Repeat live authenticated user and admin flows without enabling dev login.
-3. Verify physical Telegram clients.
+1. Re-authenticate Railway CLI and deploy `e5cbac0`; verify deployment SUCCESS/RUNNING and health again.
+2. Provide a safe real Telegram authenticated session or staging environment.
+3. Repeat live authenticated user and admin flows without enabling dev login.
+4. Verify physical Telegram clients.
 
 # Final Verdict
 
