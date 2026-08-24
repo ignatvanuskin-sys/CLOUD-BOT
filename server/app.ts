@@ -89,6 +89,14 @@ export function createApp() {
     res.setHeader('Cache-Control', 'no-store');
     return res.redirect(302, releasePath);
   });
+  // Support direct navigation to the configured release path and its client routes.
+  // Telegram opens WEBAPP_URL with a release prefix, while BrowserRouter owns the suffix.
+  if (config.WEBAPP_URL) {
+    const releasePath = new URL(config.WEBAPP_URL).pathname.replace(/\/$/, '');
+    if (releasePath && releasePath !== '/') {
+      app.use(releasePath, express.static(distDir, { maxAge: '1h', index: false }));
+    }
+  }
   // Keep hashed assets cacheable, but route HTML through the no-cache fallback below
   // so Telegram WebView does not keep an old index.html after a deployment.
   app.use(express.static(distDir, { maxAge: '1h', index: false }));
