@@ -142,28 +142,42 @@ Screenshots and computed-style inspection were used during the settings and scro
 
 # Production Deployment
 
-NOT VERIFIED. `railway status --json` reports: no linked project. No deployment was executed, and no production URL was identified in the repository.
+Railway project `49c826a1-f0f9-40f8-88d9-78abea45155e` was linked to environment `production` and service `CLOUD-BOT` (`e44d5f1d-abf6-4f30-b22e-2a92765c60f1`). GitHub remote is `https://github.com/ignatvanuskin-sys/CLOUD-BOT.git`; `main` was pushed and is at commit `9d27546`, which contains the implementation commit `c24daf0`.
+
+Deployment:
+
+- ID: `820d8125-89e4-48e3-b30a-3d4f8c8c07e2`
+- Created: 2026-08-24 08:50 UTC
+- Status: `SUCCESS`
+- Instance: running
+- Builder: Dockerfile
+- Start command: `npm run server`
+- Healthcheck: `/health/ready`
+- Public URL: `https://cloud-bot-production-efa0.up.railway.app`
+
+Production variables were checked by presence only. Required production mode is active (`NODE_ENV=production`, `ALLOW_DEV_LOGIN=false`, Postgres and S3 enabled). Secret values were not printed.
 
 # Live Verification
 
-NOT VERIFIED. The following could not be honestly claimed:
+HTTP live checks passed:
 
-- live production frontend;
-- live health endpoint;
-- live settings flow;
-- live wheel/touch behavior;
-- live authenticated/admin flow;
-- production cache behavior.
+- `/health` — HTTP 200
+- `/health/ready` — HTTP 200, `ok:true`, database/store/storage/Telegram all reported healthy
+- `/` — HTTP 302 to the configured release path
+- `/app-responsive-20260823` — HTTP 200
+- `/profile` — HTTP 200
+- `/settings` — HTTP 200
+
+The deployed HTML references a new hashed frontend bundle after deployment. A full live Playwright interaction run was attempted, but unauthenticated production Profile does not expose the settings gear; a valid Telegram initData/auth session is required for authenticated live UI checks. No production authentication bypass was used.
+
+Not verified live: authenticated settings controls, wheel/touch interaction on production, admin flow, and real Telegram clients. No production data or payment was modified.
 
 # Remaining External Gates
 
-1. Link the repository to the intended Railway project or provide the production deployment target.
-2. Deploy commit `c24daf0`.
-3. Verify deployment reaches terminal SUCCESS.
-4. Verify health endpoint and frontend HTTP response.
-5. Run live Playwright guest/auth/admin checks.
-6. Verify Telegram Web/Desktop and, where available, Android/iOS clients.
-7. Remove the unmanaged `nul` artifact separately if it is known to be safe to delete.
+1. Run authenticated live Playwright checks using a real Telegram initData/session or safe staging fixture.
+2. Verify Telegram Web/Desktop and, where available, Android/iOS clients.
+3. Verify live wheel/touch and responsive matrix under authenticated state.
+4. Remove the unmanaged `nul` artifact separately if it is known to be safe to delete.
 
 # Security Notes
 
@@ -193,4 +207,4 @@ Scores reflect locally verified scope only; production readiness is not awarded 
 
 ## READY WITH EXTERNAL GATES
 
-All local engineering gates and the complete existing Playwright suite pass. The remaining blockers are external and concrete: Railway project linkage/deployment, live production verification, and physical Telegram client verification. No claim of production deployment or live Telegram PASS is made.
+All local engineering gates and the complete existing Playwright suite pass. Railway deployment and health are now verified. The remaining blockers are concrete: authenticated live production UI verification and physical Telegram client verification. No claim of live authenticated/admin or physical Telegram PASS is made.
