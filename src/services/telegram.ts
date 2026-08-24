@@ -6,7 +6,7 @@ type TelegramNativeButton = { setParams?: (params: Record<string, unknown>) => v
 type TelegramWebApp = {
   initData?: string; initDataUnsafe?: { start_param?: string; user?: { first_name?: string; last_name?: string; username?: string } }; version?: string; viewportStableHeight?: number; viewportHeight?: number; colorScheme?: 'light' | 'dark'; safeAreaInset?: { top?: number; bottom?: number; left?: number; right?: number }; contentSafeAreaInset?: { top?: number; bottom?: number; left?: number; right?: number };
   HapticFeedback?: { impactOccurred?: (style: 'light' | 'medium' | 'heavy') => void; selectionChanged?: () => void; notificationOccurred?: (type: 'success' | 'error') => void };
-  ready?: () => void; expand?: () => void; enableClosingConfirmation?: () => void;
+  ready?: () => void; expand?: () => void; enableClosingConfirmation?: () => void; isVersionAtLeast?: (version: string) => boolean;
   onEvent?: (name: string, handler: () => void) => void; offEvent?: (name: string, handler: () => void) => void;
   openInvoice?: (url: string, callback: (status: 'paid' | 'cancelled' | 'failed' | 'pending') => void) => void;
   openTelegramLink?: (url: string) => void; openLink?: (url: string) => void;
@@ -22,7 +22,8 @@ type TelegramWebApp = {
 export const telegram = typeof window !== 'undefined' ? window.Telegram?.WebApp : undefined;
 export const isTelegram = () => Boolean(telegram?.initData);
 export const haptic = { tap: (style: 'light' | 'medium' | 'heavy' = 'light') => telegram?.HapticFeedback?.impactOccurred?.(style), select: () => telegram?.HapticFeedback?.selectionChanged?.(), success: () => telegram?.HapticFeedback?.notificationOccurred?.('success'), error: () => telegram?.HapticFeedback?.notificationOccurred?.('error') };
-export function initTelegram() { telegram?.ready?.(); telegram?.expand?.(); telegram?.enableClosingConfirmation?.(); }
+function supports(version: string) { try { return !telegram?.isVersionAtLeast || telegram.isVersionAtLeast(version); } catch { return false; } }
+export function initTelegram() { telegram?.ready?.(); if (supports('6.1')) telegram?.expand?.(); if (supports('6.2')) telegram?.enableClosingConfirmation?.(); }
 export function onTelegramEvent(name: string, handler: () => void) { telegram?.onEvent?.(name, handler); return () => telegram?.offEvent?.(name, handler); }
 
 export function openInvoice(url: string) {
