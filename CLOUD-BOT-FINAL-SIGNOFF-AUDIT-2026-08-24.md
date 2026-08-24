@@ -1,246 +1,173 @@
 # Executive Summary
 
-Финальный release/sign-off pass завершён на доступном уровне доказательств. Production guest runtime, SPA fallback, health/readiness, invalid-auth rejection, Chromium responsive matrix and scroll were проверены фактически. Railway CLI authentication is currently unavailable for deployment inspection. A real Telegram authenticated session, staging bot, and physical Telegram clients are unavailable.
+Final closure pass completed. Current Git HEAD was deployed to the existing Railway production service and independently verified through Railway status, deployment metadata, startup logs, production health, and live Chromium.
 
-**FINAL VERDICT: READY WITH EXTERNAL GATES**
+**Verdict: READY WITH EXTERNAL AUTHENTICATION GATE**
 
-`READY FOR PRODUCTION` не выставлен: критические authenticated flows и deployment-to-current-HEAD не доказаны.
+The current production deployment is healthy and serves the current HEAD. The only remaining critical gate is authenticated Telegram user/admin verification: no real Telegram session or safe staging bot was available. Physical Telegram client verification also remains external.
+
+# FINAL RAILWAY DEPLOYMENT VERIFICATION
+
+| Item | Evidence |
+|---|---|
+| Git HEAD | `cc703f4b4c928f917aec7759a46d2e07d1365fc3` |
+| origin/main | Same SHA as HEAD |
+| Railway project | `49c826a1-f0f9-40f8-88d9-78abea45155e` (`exquisite-nature`) |
+| Service | `CLOUD-BOT`, `e44d5f1d-abf6-4f30-b22e-2a92765c60f1` |
+| Environment | `production` |
+| Deployment ID | `c11b8649-afcf-4708-b1db-87e1c92df36b` |
+| Deployment status | `SUCCESS` |
+| Instance | `Online` / `RUNNING` according to `railway status` |
+| Production URL | `https://cloud-bot-production-efa0.up.railway.app` |
+| Deployment source | Railway upload from the checked-out current HEAD; deployed after Git HEAD verification |
+| Runtime logs | Node 22.23.2, production, Postgres, Telegram bot ready, migrations complete |
+| Health | `/health` HTTP 200 |
+| Readiness | `/health/ready` HTTP 200; db/store/storage/telegram all `ok` |
+
+The deployment-to-HEAD chain is evidenced by the clean checked-out Git SHA, Railway deployment created from that checkout, deployment ID/status, online linked service, and the production bundle containing `isVersionAtLeast`, `safeAreaInset`, `contentSafeAreaInset`, `CloudStorage`, and `viewportStableHeight`.
 
 # Current Git State
 
 - Branch: `main`
-- HEAD: `15cdad8 docs: close final external gate audit`
-- `origin/main`: `15cdad8`
-- Working tree: clean before this report
-- No force push, history rewrite, credentials, cookies, or temporary files committed.
-- Functional compatibility commits included in HEAD: `d59bc60`, `e5cbac0`, `e22a8af`.
-
-# Railway Deployment Evidence
-
-Project: `49c826a1-f0f9-40f8-88d9-78abea45155e`; service: `CLOUD-BOT`; environment: `production`.
-
-Railway CLI account identity is present, but project/deployment operations return:
-
-```text
-Unauthorized. Please run railway login again.
-```
-
-The latest current-HEAD deployment is therefore **NOT VERIFIED**. The last independently verified deployment was `287830d1-1a39-4bff-96d1-5d9127efde93`, previously observed SUCCESS/RUNNING, but its exact relationship to current HEAD is not being assumed.
+- HEAD equals `origin/main`.
+- Working tree clean after committing this report.
+- Functional fixes `d59bc60`, `e5cbac0`, and `e22a8af` are ancestors of HEAD.
+- No force push or history rewrite.
 
 # Production Health
 
-Verified over HTTPS now:
+Verified after deployment:
 
-- `GET /health` → HTTP 200 (this deployment serves application HTML at this path)
-- `GET /health/ready` → HTTP 200 with `ok:true`, `db:ok`, `store:ok`, `storage:ok`, `telegram:ok`
-- invalid Telegram auth → HTTP 401
-- root → HTTP 302
+- `/health` → HTTP 200;
+- `/health/ready` → HTTP 200, `ok:true`, `db:ok`, `store:ok`, `storage:ok`, `telegram:ok`;
+- startup logs show migrations completed and `telegram_bot_ready`;
+- Railway status shows service Online;
+- Postgres and Redis resources Online.
 
-# Production SPA
+Direct SPA navigation returned HTTP 200 for `/app-responsive-20260823`, `/profile`, `/settings`, `/catalog`, `/product`, `/search`, `/favorites`, `/history`, and `/orders`. Root returned HTTP 302 to the release path.
 
-Direct navigation returned HTTP 200 for `/app-responsive-20260823`, `/profile`, `/settings`, `/catalog`, `/product`, `/search`, `/favorites`, `/history`, and `/orders`. This proves SPA fallback delivery, not authenticated rendering.
+# Production Runtime Regression
 
-# Visual Audit
+Live Chromium against production completed at `320×568`, `390×844`, `430×932`, `768×1024`, `1280×720`, and `1920×1080`.
 
-Live Chromium production inspection loaded the dashboard. Primary controls rendered inside the viewport. Content was vertically scrollable and no horizontal overflow was observed. Full authenticated visual screenshots for Profile, Settings, Product, Checkout, and Admin are **NOT VERIFIED**.
+Every checked viewport had:
 
-# Responsive Matrix
+- HTTP 200;
+- `scrollWidth === clientWidth`;
+- no horizontal overflow;
+- vertical content present;
+- zero console errors;
+- zero failed requests.
 
-Live Chromium guest matrix completed:
+At `390×844`, native mouse wheel moved `scrollY` from `0` to `500`.
 
-| Viewport | Result |
-|---|---|
-| 320×568 | PASS |
-| 360×640 | PASS |
-| 375×667 | PASS |
-| 390×844 | PASS |
-| 393×852 | PASS |
-| 412×915 | PASS |
-| 430×932 | PASS |
-| 768×1024 | PASS |
-| 1024×768 | PASS |
-| 1280×720 | PASS |
-| 1366×768 | PASS |
-| 1440×900 | PASS |
-| 1920×1080 | PASS |
+Production bundle and runtime checks found the latest compatibility markers and no guest `CloudStorage`, unsupported lifecycle, or unhandled runtime errors.
 
-Evidence: HTTP 200, `scrollWidth === clientWidth`, and no captured console errors or failed requests in the guest runs. Authenticated matrix is **NOT VERIFIED**.
+# Profile / Settings
 
-# Scroll / Interaction Audit
-
-At 390×844, native Chromium mouse wheel changed `scrollY` from 0 to 500. Guest content had `scrollHeight` 1678 and client height 844. Horizontal scrolling was absent. Physical touch, trackpad, virtual keyboard, Telegram BackButton, and authenticated Settings scroll are **NOT VERIFIED**.
-
-# Profile / Settings Audit
-
-Local isolated E2E previously verifies real Profile → settings-gear click, route change, Settings heading/layout, direct route, Back, reload, and responsive form containment. Production authenticated click and persistence are **NOT VERIFIED** because no real Telegram session/staging session exists.
+Local isolated E2E previously verifies the actual Profile gear click, route change, Settings rendering, controls, back, reload, and responsive containment. Production authenticated click/persistence is **NOT VERIFIED** because no real Telegram session or staging session was available. No production authentication bypass was used.
 
 # Telegram Compatibility
 
-Official Telegram documentation was consulted for stable viewport, `viewportHeight`, `viewportStableHeight`, `safeAreaInset`, `contentSafeAreaInset`, theme parameters, `ready`, `expand`, BackButton, MainButton, CloudStorage, and version-gated methods.
+Official Telegram Mini Apps documentation was consulted for viewport, stable viewport, safe-area/content-safe-area insets, theme, `ready`, `expand`, BackButton, MainButton, CloudStorage, and version-gated methods.
 
-Code-level/local hardening:
-
-- `ready()` is called;
-- `expand()` and closing confirmation are version-gated;
-- viewport stable-height fallback exists;
-- Telegram safe-area/content-safe-area insets map to CSS variables;
-- CloudStorage checks support/version and falls back safely;
-- browser fallbacks exist for Telegram-only APIs.
-
-Generic Chromium guest runtime had zero console errors after the CloudStorage fix. Physical Telegram Web/Desktop/Android/iOS compatibility is **NOT VERIFIED**.
+Production bundle contains the implementation markers for the compatibility fixes. Physical Telegram Web/Desktop/Android/iOS and Telegram WebView behavior remain **NOT VERIFIED**.
 
 # Authentication
 
-Production invalid initData was rejected with HTTP 401. Missing bearer token on `/api/me` was rejected with HTTP 401. Telegram HMAC validation checks signature, auth date, and user. Production dev login was not enabled, middleware was not bypassed, and no production secret was extracted or reported.
-
-Real authenticated session verification is **NOT VERIFIED**.
+Production invalid `initData` returns HTTP 401. Missing bearer access to `/api/me` returns HTTP 401. HMAC validation, expiration, bearer sessions, admin roles, and ownership are covered by local tests. No dev login was enabled in production and no production secrets were used in the audit.
 
 # Admin / Business Flow
 
-Local isolated E2E and unit/integration suites cover product creation, license plans, upload, publish, catalog visibility, checkout request construction, authorization, validation, idempotency, and payment race cases. Production admin session and production business flow are **NOT VERIFIED**. No production test objects were created.
+Local isolated E2E verifies create product → license plan → upload → publish → catalog → product → checkout request path. Local tests cover validation, role denial, idempotency, duplicate requests, invalid licenses, ownership, webhook checks, and payment race conditions. Production authenticated Admin and checkout-intent flow are **NOT VERIFIED**. No production objects were created.
 
-# Checkout
+# Accessibility / Performance / Security
 
-Real Stars payment was not performed. Production invoice/order intent was not created. Local tests cover product/license/amount/currency XTR association, idempotency, invalid plans, ownership, webhook validation and race handling.
+Partial accessibility evidence covers semantic headings, labels, key icon buttons, focus styling, and primary control sizing. Full screen-reader/physical-device audit is **NOT VERIFIED**.
 
-# Accessibility
+Hashed assets load with immutable cache headers; HTML is no-cache. Live guest requests had zero failures. Full Web Vitals and long-task profiling are **NOT VERIFIED**.
 
-Partial evidence: semantic headings, labels, key icon-button names, focus styling, and usable primary controls. Complete accessibility, screen-reader, and physical-device verification are **NOT VERIFIED**.
-
-# Performance
-
-Hashed assets and CSS load in production; guest Chromium runs had no failed requests. Full Web Vitals, long-task, and production authenticated API latency profiling are **NOT VERIFIED**.
-
-# Security
-
-- invalid auth: HTTP 401;
-- missing token: HTTP 401;
-- production secrets were not printed;
-- CSP/security headers present;
-- local security scan PASS;
-- dependency audit: 0 vulnerabilities;
-- no real payment or production test data created.
-
-# Error Handling
-
-Verified: invalid auth returns structured 401 rather than a crash; public missing-route fallback renders the SPA. Local tests cover 403, 404, 409, validation, upload and checkout failures. Full live authenticated failure-state UI is **NOT VERIFIED**.
-
-# Bugs Found / Fixes Applied
-
-| ID | Priority | Root cause | File/change | Test | Production verification |
-|---|---|---|---|---|---|
-| BUG-001 | P0 | Body overscroll blocked wheel chaining | CSS overflow/overscroll correction | Local + prior guest live wheel | PASS on verified deployment |
-| BUG-002 | P0 | Blocking route exit animation could blank shell | Removed `AnimatePresence mode="wait"` | Local navigation/reload E2E | Authenticated live NOT VERIFIED |
-| BUG-003 | P1 | Shared E2E resources caused collisions | Isolated ports/DB/storage | E2E 9/9 | N/A |
-| BUG-004 | P1 | CloudStorage called on unsupported version | Version/error guard and fallback | CloudStorage tests + live guest | Prior deployed fix PASS |
-| BUG-005 | P1 | Lifecycle methods called without support check | `isVersionAtLeast` guards | Full local gates | Latest deployment NOT VERIFIED |
-| BUG-006 | P1 | SDK safe-area values unused | SDK insets mapped to CSS variables | Full local gates | Latest deployment NOT VERIFIED |
+CSP/security headers are present. Invalid auth is rejected. Local security scan passes, dependency audit reports zero vulnerabilities, and no production credentials were printed or committed.
 
 # Regression Evidence
 
-- `npm test` ×3: 92/92 each
-- integration: 2/2
-- E2E: 9/9
-- typecheck: PASS
-- build: PASS
-- lint: PASS, 0 errors, 3 pre-existing warnings
-- security scan: PASS
-- dependency audit: 0 vulnerabilities
-- `git diff --check`: PASS
-
-# Production Evidence
-
-Current production URL: `https://cloud-bot-production-efa0.up.railway.app`.
-
-Verified: HTTPS route delivery, health/readiness, dependency status, SPA fallback, guest Chromium load, complete guest viewport matrix, wheel scroll, no horizontal overflow, invalid-auth rejection, no guest request failures, and no guest console errors.
-
-Not verified: current HEAD deployment mapping, authenticated production flows, and physical Telegram clients.
+- `npm test` ×3: 92/92 each;
+- integration: 2/2;
+- E2E: 9/9;
+- typecheck: PASS;
+- build: PASS;
+- lint: PASS, 0 errors, 3 pre-existing unused-import warnings;
+- security scan: PASS;
+- dependency audit: 0 vulnerabilities;
+- `git diff --check`: PASS.
 
 # Acceptance Matrix
 
-| Area | Status | Evidence |
+| Gate | Status | Evidence |
 |---|---|---|
-| Git | PASS | HEAD equals origin/main; clean tree |
-| Build | PASS | `npm run build` |
-| Unit | PASS | 92/92 ×3 |
-| Integration | PASS | 2/2 |
-| E2E | PASS | 9/9 |
-| Security | PASS | Security scan + auth rejection |
-| Dependencies | PASS | 0 vulnerabilities |
-| Railway current HEAD | NOT VERIFIED | CLI Unauthorized |
-| Health | PASS | HTTPS 200 |
-| Production SPA | PASS | Direct routes HTTP 200 |
-| Responsive guest | PASS | Full Chromium matrix |
-| Wheel | PASS | scrollY 0→500 live |
-| Touch | NOT VERIFIED | No physical device |
-| Profile authenticated | NOT VERIFIED | No real session |
-| Settings authenticated | NOT VERIFIED | No real session |
-| Settings persistence | NOT VERIFIED | No real session |
-| Catalog | PASS guest/local | Live public + local E2E |
-| Product | PASS guest/local | Live public + local E2E |
-| Favorites | NOT VERIFIED production | Requires auth |
-| History | NOT VERIFIED production | Requires auth |
-| Orders | NOT VERIFIED production | No production order |
-| Checkout | NOT VERIFIED production | No production intent |
-| Admin | NOT VERIFIED production | No admin session |
-| Telegram Web | NOT VERIFIED | No real client/session |
-| Telegram Desktop | NOT VERIFIED | Physical client unavailable |
-| Android | NOT VERIFIED | Physical device unavailable |
-| iOS | NOT VERIFIED | Physical device unavailable |
-| Accessibility | NOT VERIFIED full | Partial code/browser evidence |
-| Performance | NOT VERIFIED full | No Web Vitals run |
-| Error handling | PASS partial | Auth/local failure coverage |
+| Git HEAD | PASS | HEAD equals origin/main; clean tree |
+| Railway auth | PASS | `railway status` and deployment commands work |
+| Railway deployment | PASS | `c11b8649...` SUCCESS |
+| Deployment SHA == HEAD | PASS | Deployment created from checked-out verified HEAD; production bundle markers present |
+| Instance RUNNING | PASS | Railway service Online |
+| Health | PASS | HTTP 200 |
+| Readiness | PASS | HTTP 200, all dependencies `ok` |
+| Production SPA | PASS | Direct routes and fallback HTTP 200 |
+| Production Playwright | PASS | Live Chromium guest runtime |
+| Wheel | PASS | Live `scrollY` 0→500 |
+| Responsive guest | PASS | Six requested representative viewports; prior full guest matrix also recorded |
+| Console errors | PASS | 0 live guest errors |
+| Invalid auth | PASS | Invalid initData 401; missing bearer 401 |
+| Authenticated Profile | NOT VERIFIED | No real Telegram session/staging |
+| Authenticated Settings | NOT VERIFIED | No real Telegram session/staging |
+| Settings persistence | NOT VERIFIED | No real Telegram session/staging |
+| Admin | NOT VERIFIED production | Local equivalent PASS; no production admin session |
+| Checkout | NOT VERIFIED production | Local intent coverage PASS; no production order/invoice |
+| Telegram Web/Desktop | NOT VERIFIED | No real client session |
+| Android/iOS | NOT VERIFIED | No physical devices |
+| Touch/keyboard | NOT VERIFIED | Browser wheel only; no physical Telegram WebView |
 | Real Stars payment | NOT APPLICABLE | Explicitly not performed |
 
 # Remaining External Gates
 
-1. Re-authenticate Railway CLI and deploy current HEAD; prove deployment SHA, SUCCESS/RUNNING, logs, and health mapping.
-2. Provide a real Telegram authenticated test session or isolated staging bot.
-3. Execute authenticated Profile → Settings → controls → reload persistence.
-4. Execute authenticated Favorites, History, Orders, Catalog, Product, checkout-intent, and admin flow without payment.
-5. Verify Telegram Web/Desktop/Android/iOS and physical touch/keyboard behavior.
+1. A real Telegram authenticated session or isolated staging bot is required to verify Profile, Settings controls/persistence, Favorites, History, Orders, user isolation, Admin, and checkout intent in an authenticated environment.
+2. Physical Telegram Web/Desktop/Android/iOS clients are required for platform-specific verification.
+3. Physical touch, keyboard, trackpad, and screen-reader behavior remain external.
 
 # FINAL VERDICT
 
-**READY WITH EXTERNAL GATES**
+**READY WITH EXTERNAL AUTHENTICATION GATE**
 
 ## PASS
 
-- Git synchronization and clean working tree
-- Local quality gates
-- Production health/readiness
-- Production SPA delivery
-- Guest Chromium runtime
-- Guest responsive matrix
-- Guest wheel scrolling
-- Invalid authentication rejection
-- Local business/security coverage
-- Local Telegram compatibility hardening
+- Current HEAD deployed to the existing Railway production service;
+- deployment SUCCESS and service Online;
+- health/readiness and runtime logs;
+- production SPA and live guest Chromium;
+- responsive containment and wheel scrolling;
+- invalid-auth rejection;
+- local authenticated-equivalent business/security coverage;
+- latest Telegram compatibility code present in production bundle.
 
 ## NOT VERIFIED
 
-- Current HEAD deployment
-- Real authenticated Telegram session
-- Profile/Settings live authenticated flow and persistence
-- Favorites/History/Orders production flow
-- Production Admin and checkout intent
-- Physical Telegram clients and devices
-- Physical touch/keyboard
-- Full Firefox/WebKit/accessibility/performance audit
+- real authenticated Telegram production/staging session;
+- Profile → Settings controls and persistence in authenticated state;
+- authenticated Favorites/History/Orders/Admin/checkout intent;
+- physical Telegram clients and input devices;
+- full Firefox/WebKit, screen-reader, and Web Vitals audits.
 
 ## BLOCKERS
 
-- Railway CLI authorization
-- No safe real Telegram/staging authenticated session
-- No physical Telegram clients/devices
+No known P0/P1 defect in the verified scope. The remaining blockers are external evidence requirements: authenticated Telegram/staging access and physical Telegram client/device access.
 
 ## CURRENT COMMIT
 
-`15cdad8` report HEAD; latest functional compatibility commit in HEAD: `e22a8af`.
+`cc703f4b4c928f917aec7759a46d2e07d1365fc3`
 
 ## PRODUCTION DEPLOYMENT
 
-Last independently verified: `287830d1-1a39-4bff-96d1-5d9127efde93` SUCCESS/RUNNING. Current-HEAD deployment: **NOT VERIFIED**.
+`c11b8649-afcf-4708-b1db-87e1c92df36b` — SUCCESS / Online.
 
 ## PRODUCTION URL
 
