@@ -10,7 +10,7 @@ for (const [width,height] of viewports) {
     const errors=[], requests=[]; const onConsole=m=>{if(m.type()==='error')errors.push(m.text())}; const onRequestFailed=r=>requests.push(`${r.method()} ${r.url()} ${r.failure()?.errorText||''}`);
     page.on('console',onConsole); page.on('requestfailed',onRequestFailed);
     const response=await page.goto(base+route,{waitUntil:'networkidle',timeout:30000});
-    const metrics=await page.evaluate(()=>({scrollWidth:document.documentElement.scrollWidth,innerWidth:innerWidth,content:document.querySelector('#main-content')?.textContent?.trim().length||0,nav:!!document.querySelector('nav[aria-label="Основная навигация"]'),navRect:document.querySelector('nav[aria-label="Основная навигация"]')?.getBoundingClientRect().toJSON(),docHeight:document.documentElement.scrollHeight}));
+    const metrics=await page.evaluate(() => { const doc = globalThis.document; return {scrollWidth:doc.documentElement.scrollWidth,innerWidth:globalThis.innerWidth,content:doc.querySelector('#main-content')?.textContent?.trim().length||0,nav:!!doc.querySelector('nav[aria-label="Основная навигация"]'),navRect:doc.querySelector('nav[aria-label="Основная навигация"]')?.getBoundingClientRect().toJSON(),docHeight:doc.documentElement.scrollHeight}; });
     const bad= response?.status()!==200 || errors.length || requests.length || metrics.scrollWidth>metrics.innerWidth+1 || !metrics.content || !metrics.nav || (metrics.navRect && metrics.navRect.bottom>height+1);
     if(bad) failed++;
     rows.push({width,height,route,status:response?.status(),errors:errors.length,failedRequests:requests.length,...metrics,bad});
