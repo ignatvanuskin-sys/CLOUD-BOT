@@ -1,4 +1,10 @@
+import { Mascot } from './Mascot';
+
 export function Logo({ size = 28 }: { size?: number }) {
+  return <Mascot pose="face" size={size} className="brand-mascot" alt="" />;
+}
+
+export function LegacyLogoMark({ size = 28 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 40 40" fill="none" aria-hidden focusable="false">
       <rect width="40" height="40" rx="12" fill="url(#cb-grad)" />
