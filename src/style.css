@@ -32,7 +32,7 @@ html,body{width:100%;max-width:100%;overflow-x:hidden}#root{width:100%;max-width
 .profile-hero-copy,.settings-hero>div:nth-child(2),.settings-account-card>div:nth-child(2),.profile-premium-card>div{min-width:0;overflow-wrap:anywhere}
 .product-grid,.support-grid,.principles,.benefit-grid,.achievement-grid,.quick-grid,.stats-grid,.profile-stats{min-width:0}
 .product-card,.history-list>div,.profile-menu-item,.plan-card{min-width:0;overflow-wrap:anywhere}
-.native-home-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 2px}.native-home-head h1{font-size:28px;letter-spacing:-.04em}.home-links{display:grid;grid-template-columns:repeat(4,1fr);border-block:1px solid var(--line);padding:7px 0}.home-links .btn{border:0;background:transparent;border-radius:10px;padding:9px 4px;display:grid;gap:5px;font-size:11px;color:var(--muted)}.home-links .btn svg{margin:auto;width:18px;color:var(--accent)}@media(max-width:620px){
+.native-home-head{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:12px;padding:8px 2px}.native-home-head h1{font-size:28px;letter-spacing:-.04em}.home-links{display:grid;grid-template-columns:repeat(4,1fr);border-block:1px solid var(--line);padding:7px 0}.home-links .btn{border:0;background:transparent;border-radius:10px;padding:9px 4px;display:grid;gap:5px;font-size:11px;color:var(--muted)}.home-links .btn svg{margin:auto;width:18px;color:var(--accent)}@media(max-width:620px){
   .app-content{padding-inline:clamp(10px,3.5vw,16px)}
   .glass-card{padding:clamp(14px,4vw,18px)}
   .page{gap:18px}
