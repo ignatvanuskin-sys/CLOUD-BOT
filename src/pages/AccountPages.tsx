@@ -53,7 +53,7 @@ export function ProfilePage() {
     </section>
 
     <section className="profile-section">
-      <div className="profile-section-heading"><div><span className="eyebrow">Workspace center</span><h2>Ваш профиль</h2><p>Управляйте покупками, доступом и настройками пространства.</p></div><Badge>{licenseCount ? 'Есть активные лицензии' : 'Готов к запуску'}</Badge></div>
+      <div className="profile-section-heading"><div><span className="eyebrow">CLOUD-BOT</span><h2>Ваш профиль</h2><p>Покупки, избранное и настройки.</p></div><Badge>{licenseCount ? 'Есть лицензии' : 'Готов к запуску'}</Badge></div>
       <div className="profile-menu-grid">{profileMenu.map(([Icon, title, text, to], i) => <motion.button className="profile-menu-item" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * .04 }} key={to} onClick={() => nav(to)}><span className="menu-icon"><Icon /></span><span className="menu-copy"><b>{title}</b><small>{text}</small></span><ChevronRight /></motion.button>)}{access.data?.canCreateProjects ? <motion.button className="profile-menu-item" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: profileMenu.length * .04 }} onClick={() => nav('/admin/projects')}><span className="menu-icon"><FolderPlus /></span><span className="menu-copy"><b>Управление товарами</b><small>Создать проект и опубликовать</small></span><ChevronRight /></motion.button> : null}</div>
     </section>
 

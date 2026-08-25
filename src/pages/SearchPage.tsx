@@ -43,7 +43,7 @@ export default function SearchPage() {
   }
 
   return <div className="page">
-    <div className="page-heading"><span className="eyebrow">Smart discovery</span><h1>Найдите готовое решение</h1><p>По задаче, технологии, категории или бюджету.</p></div>
+    <div className="page-heading"><span className="eyebrow">CLOUD-BOT · Каталог</span><h1>Найдите готовое решение</h1><p>По задаче, технологии, категории или бюджету.</p></div>
     <form className="search-sticky" role="search" onSubmit={event => event.preventDefault()}>
       <label className="search-box" htmlFor="catalog-search"><SearchIcon aria-hidden/><span className="sr-only">Поиск по каталогу</span><input id="catalog-search" value={q} maxLength={MAX_QUERY_LENGTH} onChange={event => setQ(event.target.value)} placeholder="AI-бот, магазин, бронирование…" autoFocus/><button type="button" onClick={q ? () => setQ('') : paste} aria-label={q ? 'Очистить поиск' : 'Вставить из буфера'}><>{q ? <X aria-hidden /> : <SlidersHorizontal aria-hidden />}</></button></label>
       <div className="filter-row" aria-label="Категория">
