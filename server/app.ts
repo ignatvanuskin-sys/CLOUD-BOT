@@ -78,6 +78,7 @@ export function createApp() {
   app.use((req, res, next) => { req.setTimeout(30_000); res.setTimeout(30_000); next(); });
 
   const distDir = path.resolve('dist');
+  app.use('/mascot', express.static(path.join(distDir, 'mascot'), { maxAge: '1y', immutable: true }));
   app.use('/assets', express.static(path.join(distDir, 'assets'), { maxAge: '1y', immutable: true }));
   // Old Telegram messages may keep an inline WebApp button pointing at '/'. Redirect
   // that stable URL to the current release path so Telegram creates a fresh WebView.
